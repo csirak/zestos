@@ -1,7 +1,6 @@
-const mem = @cImport(@cInclude("memlayout.h"));
+const riscv = @import("riscv.zig");
 
-export const stack0 align(16) = [_]u8{0} ** (mem.PGSIZE * mem.NCPU);
-export const timer_scratch align(16) = [_]u64{0} ** (mem.NCPU * 5);
+export var stack0 align(16) = [_]u8{0} ** (riscv.PGSIZE * riscv.NCPU);
 
 comptime {
     asm (
