@@ -1,8 +1,5 @@
 const riscv = @import("riscv.zig");
 
-const tu = riscv.TRAPFRAME >> 32;
-const tl = riscv.TRAPFRAME & 0xFFFFFFFF;
-
 comptime {
     asm (
         \\        .section   trampsec
@@ -95,7 +92,7 @@ comptime {
         \\
         \\        .globl     userret
         \\userret:
-        \\# userret(pagetable)
+        \\# userret(PageTable)
         \\# called by usertrapret() in trap.c to
         \\# switch from kernel to user.
         \\# a0: user page table, for satp.

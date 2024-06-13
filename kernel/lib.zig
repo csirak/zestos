@@ -1,7 +1,9 @@
+const std = @import("std");
+
 comptime {
     asm (
-        \\.globl putchar
-        \\putchar:
+        \\.globl putChar
+        \\putChar:
         \\.equ     UART_REG_TXFIFO, 0
         \\.equ     UART_BASE, 0x10000000
         \\li       t0, UART_BASE           # load UART base address
@@ -17,11 +19,34 @@ comptime {
     );
 }
 
-extern fn putchar(c: u8) void;
+extern fn putChar(c: u8) void;
 
 pub fn print(s: []const u8) void {
     for (s) |c| {
-        putchar(c);
+        putChar(c);
     }
-    putchar('\n');
+}
+
+pub fn println(s: []const u8) void {
+    print(s);
+    putChar('\n');
+}
+
+pub fn printInt(n: u64) void {
+    var buf: [20]u8 = undefined;
+    println(intToString(n, &buf));
+}
+
+pub fn printPtr(ptr: anytype) void {
+    printInt(@intFromPtr(ptr));
+}
+
+fn intToString(int: u64, buf: []u8) []const u8 {
+    return std.fmt.bufPrint(buf, "0x{x}", .{int}) catch "";
+}
+
+pub fn kpanic(msg: []const u8) noreturn {
+    print("kernel panic: ");
+    println(msg);
+    while (true) {}
 }
