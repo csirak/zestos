@@ -1,8 +1,15 @@
 pub const NCPU = 4;
 pub const PGSIZE = 4096; // bytes per page
 
-pub const TIMER_INTERVAL = 1000000;
+pub const UART0: u64 = 0x10000000;
+pub const VIRTIO0: u64 = 0x10001000;
+
 pub const CLINT: u64 = 0x2000000;
+pub const PLIC: u64 = 0x0c000000;
+pub const KERNBASE: u64 = 0x80000000;
+
+pub const PLIC_SIZE = 0x400000;
+pub const TIMER_INTERVAL = 1000000;
 pub const CLINT_MTIME: *u64 = @ptrFromInt(CLINT + 0xBFF8);
 
 pub inline fn CLINT_MTIMECMP(hartid: u64) *u64 {
@@ -10,7 +17,6 @@ pub inline fn CLINT_MTIMECMP(hartid: u64) *u64 {
 }
 
 pub const MAXVA: u64 = (1 << (9 + 9 + 9 + 12 - 1));
-pub const KERNBASE: u64 = 0x80000000;
 pub const PHYSTOP: u64 = (KERNBASE + 128 * 1024 * 1024);
 
 // map the trampoline page to the highest address,
@@ -186,13 +192,19 @@ pub inline fn fence_iorw() void {
 
 pub inline fn atomic_swap(ptr: anytype, val: u64) u64 {
     var out: u64 = undefined;
-
     asm volatile ("amoswap.w.aq %[old], %[val], (%[ptr])"
         : [old] "=r" (out),
         : [ptr] "r" (ptr),
           [val] "r" (val),
     );
     return out;
+}
+
+pub inline fn atomic_write_zero(ptr: anytype) void {
+    asm volatile ("amoswap.w zero, zero, (%[ptr])"
+        :
+        : [ptr] "r" (ptr),
+    );
 }
 
 pub inline fn w_satp(x: u64) void {

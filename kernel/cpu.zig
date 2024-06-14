@@ -8,6 +8,7 @@ var cpus: [riscv.NCPU]Self = undefined;
 
 pub fn pushInterrupt(self: *Self) void {
     const old = riscv.intr_get();
+
     riscv.intr_off();
     if (self.disabled_depth == 0) {
         self.interrupts_enabled = old;

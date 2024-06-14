@@ -1,4 +1,5 @@
 const mem = @import("mem.zig");
+usingnamespace mem;
 
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
@@ -10,9 +11,9 @@ const run = struct {
     next: ?*run,
 };
 
-extern var end: u64;
-
-const Self = @This();
+extern const end: u64;
+extern const etext: u64;
+extern const trampoline: u64;
 
 var lock: Spinlock = undefined;
 var freed: ?*run = undefined;
@@ -24,6 +25,14 @@ pub fn init() void {
     freed = @ptrFromInt(riscv.PHYSTOP);
     freeRange(@intFromPtr(&end), riscv.PHYSTOP);
     pagetable = PageTable.init();
+    lib.printInt(etext - riscv.KERNBASE);
+    lib.printInt(end);
+    lib.printInt(trampoline);
+
+    mapPages(riscv.UART0, riscv.UART0, riscv.PGSIZE, mem.PTE_R | mem.PTE_W) catch unreachable;
+    mapPages(riscv.VIRTIO0, riscv.VIRTIO0, riscv.PGSIZE, mem.PTE_R | mem.PTE_W) catch unreachable;
+    mapPages(riscv.PLIC, riscv.PLIC, riscv.PLIC_SIZE, mem.PTE_R | mem.PTE_W) catch unreachable;
+    mapPages(riscv.KERNBASE, riscv.KERNBASE, etext - riscv.KERNBASE, mem.PTE_R | mem.PTE_W) catch unreachable;
 }
 
 pub fn freeRange(pa_start: u64, pa_end: u64) void {
@@ -60,8 +69,8 @@ pub fn printFreed() void {
     }
 }
 
-pub fn mapPages(virtual_address: u64, size: u64, physical_address: u64, flags: u16) !void {
-    pagetable.mapPages(virtual_address, size, physical_address, flags) catch |e| {
+pub fn mapPages(virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
+    pagetable.mapPages(virtual_address, physical_address, size, flags) catch |e| {
         lib.println("kernel map pages");
         lib.kpanic(@errorName(e));
     };
