@@ -41,7 +41,7 @@ pub fn printPtr(ptr: anytype) void {
     printInt(@intFromPtr(ptr));
 }
 
-fn intToString(int: u64, buf: []u8) []const u8 {
+pub fn intToString(int: u64, buf: []u8) []const u8 {
     return std.fmt.bufPrint(buf, "0x{x}", .{int}) catch "";
 }
 

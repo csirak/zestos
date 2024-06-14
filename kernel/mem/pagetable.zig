@@ -10,12 +10,6 @@ const PG_OFFSET_SIZE = 12;
 const PT_INDEX_SIZE = 9;
 const PTE_FLAGS_SIZE = 10;
 
-const PTE_V = (1 << 0);
-const PTE_R = (1 << 1);
-const PTE_W = (1 << 2);
-const PTE_X = (1 << 3);
-const PTE_U = (1 << 4);
-
 inline fn pageTableLevelIndex(address: u64, level: u6) u64 {
     const shift_depth: u6 = PT_INDEX_SIZE * level + PG_OFFSET_SIZE;
     return (address >> shift_depth) & PX_MASK;
@@ -57,11 +51,11 @@ pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
         const level = 2 - offset;
         const pte = &cur_pagetable[pageTableLevelIndex(virtual_address, @intCast(level))];
 
-        if (pte.* & PTE_V != 0) {
+        if (pte.* & mem.PTE_V != 0) {
             cur_pagetable = @ptrCast(pageTableEntryToPhysAddr(pte.*));
         } else if (alloc) {
             const table = makeTable() catch |e| return e;
-            pte.* = physAddrToPTE(&table[0]) | PTE_V;
+            pte.* = physAddrToPTE(&table[0]) | mem.PTE_V;
             cur_pagetable = table;
         } else {
             return error.NoAllocation;
@@ -70,8 +64,9 @@ pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
     return &cur_pagetable[pageTableLevelIndex(virtual_address, 0)];
 }
 
-pub fn mapPages(self: *Self, virtual_address: u64, size: u64, physical_address: u64, flags: u16) !void {
+pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
     var cur_page = mem.pageAlignDown(virtual_address);
+    var cur_physical_address = physical_address;
     const last_page = mem.pageAlignDown(virtual_address + size - 1);
 
     if ((last_page - cur_page) % riscv.PGSIZE != 0) {
@@ -80,11 +75,11 @@ pub fn mapPages(self: *Self, virtual_address: u64, size: u64, physical_address: 
 
     while (cur_page <= last_page) {
         const pte = self.getPhysAddrFromVa(cur_page, true) catch |e| return e;
-        if (pte.* & PTE_V != 0) {
+        if (pte.* & mem.PTE_V != 0) {
             return error.MappedPageAlreadyAllocated;
         }
-        pte.* = physAddrToPTE(physical_address) | flags | PTE_V;
+        pte.* = physAddrToPTE(@ptrFromInt(cur_physical_address)) | flags | mem.PTE_V;
         cur_page += riscv.PGSIZE;
-        physical_address += riscv.PGSIZE;
+        cur_physical_address += riscv.PGSIZE;
     }
 }
