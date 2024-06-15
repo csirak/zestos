@@ -11,6 +11,13 @@ pub inline fn pageAlignDown(a: u64) u64 {
     return ((a) & ~(ps - 1));
 }
 
+// use riscv's sv39 page table scheme.
+const SATP_SV39 = (8 << 60);
+
+pub inline fn MAKE_SATP(pagetable_address: u64) u64 {
+    return SATP_SV39 | (pagetable_address >> 12);
+}
+
 pub const PTE_V = (1 << 0);
 pub const PTE_R = (1 << 1);
 pub const PTE_W = (1 << 2);

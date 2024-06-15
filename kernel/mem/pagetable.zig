@@ -10,28 +10,7 @@ const PG_OFFSET_SIZE = 12;
 const PT_INDEX_SIZE = 9;
 const PTE_FLAGS_SIZE = 10;
 
-inline fn pageTableLevelIndex(address: u64, level: u6) u64 {
-    const shift_depth: u6 = PT_INDEX_SIZE * level + PG_OFFSET_SIZE;
-    return (address >> shift_depth) & PX_MASK;
-}
-
-inline fn pageTableEntryToPhysAddr(pte: u64) *u64 {
-    return @ptrFromInt((pte >> PTE_FLAGS_SIZE) << PG_OFFSET_SIZE);
-}
-
-inline fn physAddrToPTE(address: *u64) u64 {
-    const pa = @intFromPtr(address);
-    return (pa >> PG_OFFSET_SIZE) << PTE_FLAGS_SIZE;
-}
-
 const Table = *[PAGETABLE_SIZE]u64;
-
-fn makeTable() !Table {
-    const page = KMem.alloc() catch |e| return e;
-    const table: Table = @ptrCast(page);
-    @memset(table, 0);
-    return table;
-}
 
 const Self = @This();
 table: Table,
@@ -64,6 +43,10 @@ pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
     return &cur_pagetable[pageTableLevelIndex(virtual_address, 0)];
 }
 
+pub fn setSatp(self: *Self) void {
+    riscv.w_satp(mem.MAKE_SATP(@intFromPtr(self.table)));
+}
+
 pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
     var cur_page = mem.pageAlignDown(virtual_address);
     var cur_physical_address = physical_address;
@@ -82,4 +65,24 @@ pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: 
         cur_page += riscv.PGSIZE;
         cur_physical_address += riscv.PGSIZE;
     }
+}
+
+inline fn pageTableLevelIndex(address: u64, level: u6) u64 {
+    const shift_depth: u6 = PT_INDEX_SIZE * level + PG_OFFSET_SIZE;
+    return (address >> shift_depth) & PX_MASK;
+}
+
+inline fn pageTableEntryToPhysAddr(pte: u64) *u64 {
+    return @ptrFromInt((pte >> PTE_FLAGS_SIZE) << PG_OFFSET_SIZE);
+}
+
+inline fn physAddrToPTE(address: *u64) u64 {
+    const pa = @intFromPtr(address);
+    return (pa >> PG_OFFSET_SIZE) << PTE_FLAGS_SIZE;
+}
+fn makeTable() !Table {
+    const page = KMem.alloc() catch |e| return e;
+    const table: Table = @ptrCast(page);
+    @memset(table, 0);
+    return table;
 }

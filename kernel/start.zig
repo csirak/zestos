@@ -12,7 +12,6 @@ export fn start() noreturn {
     riscv.w_mepc(@intFromPtr(&main));
     riscv.w_satp(0);
 
-    // delegate all interrupts and exceptions to supervisor mode.
     riscv.w_medeleg(0xffff);
     riscv.w_mideleg(0xffff);
     riscv.w_sie(riscv.r_sie() | riscv.SIE_SEIE | riscv.SIE_STIE | riscv.SIE_SSIE);
