@@ -1,13 +1,11 @@
-const riscv = @import("riscv.zig");
-
 comptime {
     asm (
         \\        .section   trampsec
         \\        .globl     trampoline
-        \\.equ TRAPFRAME, 0x3fffffe000
         \\trampoline:
         \\        .align     4
         \\        .globl     uservec
+        \\        .equ TRAPFRAME, 0x3fffffe000
         \\      
         \\uservec:
         \\#

@@ -34,14 +34,14 @@ pub fn build(b: *std.Build) void {
 
     const kernelvec = b.addObject(.{
         .name = "kernelvec",
-        .root_source_file = b.path("kernel/kernelvec.zig"),
+        .root_source_file = b.path("kernel/asm/kernelvec.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     const trampoline = b.addObject(.{
         .name = "trampoline",
-        .root_source_file = b.path("kernel/trampoline.zig"),
+        .root_source_file = b.path("kernel/asm/trampoline.zig"),
         .target = target,
         .optimize = optimize,
         .code_model = .medium,
@@ -95,8 +95,8 @@ pub fn build(b: *std.Build) void {
         "-m",
         "512",
         "-smp",
-        // "4",
-        "2",
+        "4",
+        // "2",
         "-no-reboot",
         "-nographic",
         "-bios",

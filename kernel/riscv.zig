@@ -1,4 +1,5 @@
 pub const NCPU = 4;
+pub const MAX_PROCS = 64;
 pub const PGSIZE = 4096; // bytes per page
 
 pub const UART0: u64 = 0x10000000;
@@ -188,6 +189,10 @@ pub inline fn fence() void {
 
 pub inline fn fence_iorw() void {
     asm volatile ("fence iorw, iorw");
+}
+
+pub inline fn flush_tlb() void {
+    asm volatile ("sfence.vma zero, zero");
 }
 
 pub inline fn atomic_swap(ptr: anytype, val: u64) u64 {
