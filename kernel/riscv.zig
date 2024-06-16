@@ -1,9 +1,14 @@
+pub const Page = *[PGSIZE]u8;
+
 pub const NCPU = 4;
 pub const MAX_PROCS = 64;
 pub const PGSIZE = 4096; // bytes per page
 
 pub const UART0: u64 = 0x10000000;
+pub const UART0_IRQ: u64 = 10;
+
 pub const VIRTIO0: u64 = 0x10001000;
+pub const VIRTIO0_IRQ: u64 = 1;
 
 pub const CLINT: u64 = 0x2000000;
 pub const PLIC: u64 = 0x0c000000;
@@ -229,6 +234,14 @@ pub inline fn w_mscratch(x: u64) void {
 // Machine-mode interrupt vector
 pub inline fn w_mtvec(x: u64) void {
     asm volatile ("csrw mtvec, %[x]"
+        :
+        : [x] "r" (x),
+    );
+}
+
+// Supervisor-mode trap vector
+pub inline fn w_stvec(x: u64) void {
+    asm volatile ("csrw stvec, %[x]"
         :
         : [x] "r" (x),
     );

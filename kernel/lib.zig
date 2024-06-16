@@ -22,27 +22,33 @@ comptime {
 extern fn putChar(c: u8) void;
 
 pub fn print(s: []const u8) void {
-    for (s) |c| {
-        putChar(c);
+    var i: usize = 0;
+    while (s[i] != 0 and i < s.len) : (i += 1) {
+        putChar(s[i]);
     }
 }
 
 pub fn println(s: []const u8) void {
     print(s);
+    putChar('y');
     putChar('\n');
 }
 
+pub fn printErr(e: anyerror) void {
+    println(@errorName(e));
+}
+
 pub fn printInt(n: u64) void {
-    var buf: [20]u8 = undefined;
-    println(intToString(n, &buf));
+    println(intToString(n));
 }
 
 pub fn printPtr(ptr: anytype) void {
     printInt(@intFromPtr(ptr));
 }
 
-pub fn intToString(int: u64, buf: []u8) []const u8 {
-    return std.fmt.bufPrint(buf, "0x{x}", .{int}) catch "";
+pub fn intToString(int: u64) []const u8 {
+    var buf: [20]u8 = undefined;
+    return std.fmt.bufPrint(&buf, "0x{x}", .{int}) catch "";
 }
 
 pub fn kpanic(msg: []const u8) noreturn {
