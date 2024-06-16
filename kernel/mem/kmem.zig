@@ -4,7 +4,7 @@ const PageTable = @import("PageTable.zig");
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
 
-const Procedure = @import("../proc.zig");
+const Procedure = @import("../procs/proc.zig");
 const Spinlock = @import("../locks/spinlock.zig");
 
 const AddressNode = struct {
@@ -37,7 +37,9 @@ pub fn init() void {
     mapKernelPages(riscv.TRAMPOLINE, trampoline_addr, riscv.PGSIZE, mem.PTE_R | mem.PTE_X) catch unreachable;
 
     mapProcedureKernelStacks() catch unreachable;
+}
 
+pub fn coreInit() void {
     riscv.flush_tlb();
     pagetable.setSatp();
     riscv.flush_tlb();
