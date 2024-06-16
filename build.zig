@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .target = target,
         .linkage = .static,
-        .code_model = .kernel,
+        .code_model = .medium,
     });
 
     const start = b.addObject(.{
