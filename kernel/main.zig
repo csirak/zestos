@@ -15,6 +15,7 @@ pub export fn main() void {
 
         KMem.init();
         Procedure.init();
+        Traps.init();
         Traps.coreInit();
         Plic.init();
         Plic.coreInit();

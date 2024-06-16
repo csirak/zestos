@@ -81,9 +81,10 @@ const init_code = [_]u8{
 
 var PROCS: [riscv.MAX_PROCS]Self = undefined;
 
-var proc_glob_lock: Spinlock = Spinlock.init("proc_glob_lock");
+var proc_glob_lock: Spinlock = undefined;
 
-var pid_lock: Spinlock = Spinlock.init("pid_lock");
+var pid_lock: Spinlock = undefined;
+
 var init_proc: *Self = undefined;
 var nextpid: u64 = 1;
 
@@ -108,6 +109,9 @@ sys_call_context: SysCallContext,
 name: [20]u8,
 
 pub fn init() void {
+    proc_glob_lock = Spinlock.init("proc_glob_lock");
+    pid_lock = Spinlock.init("pid_lock");
+
     for (0..riscv.MAX_PROCS) |i| {
         const id = [_]u8{ @intCast((i / 10) + 48), @intCast((i % 10) + 48) };
 
