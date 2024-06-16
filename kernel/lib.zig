@@ -22,15 +22,13 @@ comptime {
 extern fn putChar(c: u8) void;
 
 pub fn print(s: []const u8) void {
-    var i: usize = 0;
-    while (s[i] != 0 and i < s.len) : (i += 1) {
-        putChar(s[i]);
+    for (s) |c| {
+        putChar(c);
     }
 }
 
 pub fn println(s: []const u8) void {
     print(s);
-    putChar('y');
     putChar('\n');
 }
 
