@@ -3,10 +3,12 @@ const mem = @import("../mem/mem.zig");
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
 
+const Cpu = @import("../cpu.zig");
+const Trap = @import("../trap.zig");
 const KMem = @import("../mem/kmem.zig");
 const Spinlock = @import("../locks/spinlock.zig");
 const PageTable = @import("../mem/pagetable.zig");
-const Cpu = @import("../cpu.zig");
+const StdOut = @import("../io/stdout.zig");
 
 const Self = @This();
 
@@ -232,6 +234,15 @@ fn initPageTable(self: *Self) !void {
     );
 }
 
+pub fn current() *Self {
+    const cpu = Cpu.current();
+    var proc: *Self = undefined;
+    cpu.pushInterrupt();
+    proc = cpu.proc.?;
+    cpu.popInterrupt();
+    return proc;
+}
+
 fn allocPid() u64 {
     pid_lock.acquire();
     const out = nextpid;
@@ -240,4 +251,10 @@ fn allocPid() u64 {
     return out;
 }
 
-export fn forkret() void {}
+export fn forkret() void {
+    // make sure to boot fs when running
+    const proc = current();
+    proc.lock.release();
+
+    Trap.userTrapReturn();
+}

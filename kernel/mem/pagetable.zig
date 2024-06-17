@@ -54,9 +54,12 @@ pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
 }
 
 pub fn setSatp(self: *Self) void {
-    riscv.w_satp(mem.MAKE_SATP(@intFromPtr(self.table)));
+    riscv.w_satp(self.getAsSatp());
 }
 
+pub fn getAsSatp(self: *Self) u64 {
+    return mem.MAKE_SATP(@intFromPtr(self.table));
+}
 pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
     const virtual_address_page_aligned = mem.pageAlignDown(virtual_address);
 

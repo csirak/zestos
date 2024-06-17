@@ -97,6 +97,13 @@ pub inline fn w_mepc(x: u64) void {
     );
 }
 
+pub inline fn w_sepc(x: u64) void {
+    asm volatile ("csrw sepc, %[x]"
+        :
+        : [x] "r" (x),
+    );
+}
+
 pub inline fn mret() void {
     asm volatile ("mret");
 }
@@ -224,6 +231,14 @@ pub inline fn w_satp(x: u64) void {
     );
 }
 
+pub inline fn r_satp() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], satp"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
 pub inline fn w_mscratch(x: u64) void {
     asm volatile ("csrw mscratch, %[x]"
         :
@@ -274,4 +289,12 @@ pub inline fn w_tp(x: u64) void {
         :
         : [x] "r" (x),
     );
+}
+
+pub inline fn r_a0() u64 {
+    var x: u64 = 0;
+    asm volatile ("mv %[x], a0"
+        : [x] "=r" (x),
+    );
+    return x;
 }
