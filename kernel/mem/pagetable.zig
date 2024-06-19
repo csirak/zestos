@@ -53,13 +53,6 @@ pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
     return &cur_pagetable[pageTableLevelIndex(virtual_address, 0)];
 }
 
-pub fn setSatp(self: *Self) void {
-    riscv.w_satp(self.getAsSatp());
-}
-
-pub fn getAsSatp(self: *Self) u64 {
-    return mem.MAKE_SATP(@intFromPtr(self.table));
-}
 pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
     const virtual_address_page_aligned = mem.pageAlignDown(virtual_address);
 
@@ -99,6 +92,14 @@ pub fn unMapPages(self: *Self, virtual_address: u64, num_pages: u64, freePages: 
         }
         pte.* = 0;
     }
+}
+
+pub inline fn setSatp(self: *Self) void {
+    riscv.w_satp(self.getAsSatp());
+}
+
+pub inline fn getAsSatp(self: *Self) u64 {
+    return mem.MAKE_SATP(@intFromPtr(self.table));
 }
 
 inline fn pageTableLevelIndex(address: u64, level: u6) u64 {

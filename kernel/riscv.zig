@@ -246,7 +246,7 @@ pub inline fn w_mscratch(x: u64) void {
     );
 }
 
-// Machine-mode interrupt vector
+// Machine-mode trap vector
 pub inline fn w_mtvec(x: u64) void {
     asm volatile ("csrw mtvec, %[x]"
         :
@@ -261,8 +261,6 @@ pub inline fn w_stvec(x: u64) void {
         : [x] "r" (x),
     );
 }
-
-// Hartid and Thread Pointer
 
 pub inline fn r_mhartid() u64 {
     var x: u64 = 0;
@@ -289,12 +287,4 @@ pub inline fn w_tp(x: u64) void {
         :
         : [x] "r" (x),
     );
-}
-
-pub inline fn r_a0() u64 {
-    var x: u64 = 0;
-    asm volatile ("mv %[x], a0"
-        : [x] "=r" (x),
-    );
-    return x;
 }

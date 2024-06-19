@@ -1,4 +1,5 @@
 const std = @import("std");
+const riscv = @import("riscv.zig");
 
 comptime {
     asm (
@@ -59,4 +60,11 @@ pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     for (0..size) |i| {
         dst[i] = src[i];
     }
+}
+
+pub fn coreLog(comptime s: []const u8) void {
+    const id = riscv.cpuid();
+    const idchar = [_]u8{ @intCast(id + 48), ' ' };
+    const out = "zest core: " ++ idchar ++ s;
+    println(out);
 }

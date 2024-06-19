@@ -15,9 +15,12 @@ pub export fn main() void {
 
         KMem.init();
         KMem.coreInit();
+
         Procedure.init();
+
         Traps.init();
         Traps.coreInit();
+
         Plic.init();
         Plic.coreInit();
 
@@ -27,20 +30,18 @@ pub export fn main() void {
         };
 
         started = true;
-        StdOut.println("zest core: 0 started!");
-        riscv.fence_iorw();
+        StdOut.coreLog("started!");
+
+        @fence(.seq_cst);
     } else {
         while (!started) {}
+        @fence(.seq_cst);
 
-        riscv.fence_iorw();
         KMem.coreInit();
         Traps.coreInit();
         Plic.coreInit();
 
-        const id = riscv.cpuid();
-        const idchar = [_]u8{@intCast(id + 48)};
-        const out = "zest core: " ++ idchar ++ " started!";
-        StdOut.println(out);
+        StdOut.coreLog("started!");
     }
 
     Procedure.scheduler();

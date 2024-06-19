@@ -20,8 +20,6 @@ var freed: ?*AddressNode = undefined;
 var pagetable: PageTable = undefined;
 
 pub fn init() void {
-    const kernel_code_end_addr = @intFromPtr(&kernelend);
-    const trampoline_addr = @intFromPtr(&trampoline);
     const kernel_end_addr = @intFromPtr(&end);
 
     lock = Spinlock.init("KMem");
@@ -29,14 +27,11 @@ pub fn init() void {
     freeRange(kernel_end_addr, riscv.PHYSTOP);
     pagetable = PageTable.init() catch unreachable;
 
-    mapKernelPages(riscv.UART0, riscv.UART0, riscv.PGSIZE, mem.PTE_R | mem.PTE_W) catch unreachable;
-    mapKernelPages(riscv.VIRTIO0, riscv.VIRTIO0, riscv.PGSIZE, mem.PTE_R | mem.PTE_W) catch unreachable;
-    mapKernelPages(riscv.PLIC, riscv.PLIC, riscv.PLIC_SIZE, mem.PTE_R | mem.PTE_W) catch unreachable;
-    mapKernelPages(riscv.KERNBASE, riscv.KERNBASE, kernel_code_end_addr - riscv.KERNBASE, mem.PTE_R | mem.PTE_X) catch unreachable;
-    mapKernelPages(kernel_code_end_addr, kernel_code_end_addr, riscv.PHYSTOP - kernel_code_end_addr, mem.PTE_R | mem.PTE_W) catch unreachable;
-    mapKernelPages(riscv.TRAMPOLINE, trampoline_addr, riscv.PGSIZE, mem.PTE_R | mem.PTE_X) catch unreachable;
-
-    mapProcedureKernelStacks() catch unreachable;
+    mapKernelPages() catch |err| {
+        lib.printErr(err);
+        lib.kpanic("Failed to map kernel pages");
+        unreachable;
+    };
 }
 
 pub fn coreInit() void {
@@ -79,14 +74,20 @@ pub fn printFreed() void {
     }
 }
 
-fn mapKernelPages(virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
-    try pagetable.mapPages(virtual_address, physical_address, size, flags);
-}
+fn mapKernelPages() !void {
+    const kernel_code_end_addr = @intFromPtr(&kernelend);
+    const trampoline_addr = @intFromPtr(&trampoline);
 
-fn mapProcedureKernelStacks() !void {
+    try pagetable.mapPages(riscv.UART0, riscv.UART0, riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+    try pagetable.mapPages(riscv.VIRTIO0, riscv.VIRTIO0, riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+    try pagetable.mapPages(riscv.PLIC, riscv.PLIC, riscv.PLIC_SIZE, mem.PTE_R | mem.PTE_W);
+    try pagetable.mapPages(riscv.KERNBASE, riscv.KERNBASE, kernel_code_end_addr - riscv.KERNBASE, mem.PTE_R | mem.PTE_X);
+    try pagetable.mapPages(kernel_code_end_addr, kernel_code_end_addr, riscv.PHYSTOP - kernel_code_end_addr, mem.PTE_R | mem.PTE_W);
+    try pagetable.mapPages(riscv.TRAMPOLINE, trampoline_addr, riscv.PGSIZE, mem.PTE_R | mem.PTE_X);
+
     for (0..riscv.MAX_PROCS) |i| {
         const page = try alloc();
         const virtual_address = riscv.KSTACK(i);
-        try mapKernelPages(virtual_address, @intFromPtr(page), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+        try pagetable.mapPages(virtual_address, @intFromPtr(page), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
     }
 }
