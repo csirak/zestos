@@ -8,15 +8,9 @@ var free_block: u32 = fs.NUM_META_BLOCKS;
 var disk: std.fs.File = undefined;
 
 pub fn main() void {
-    var args = std.process.args();
-    defer args.deinit();
-    _ = args.skip();
-
     debug.print("nmeta: {d} (boot, super, log blocks: {d} inode blocks: {d}, bitmap blocks: {d})\ndata blocks: {d}\ntotal: {d}\n\n", .{ fs.NUM_META_BLOCKS, fs.NUM_LOG_BLOCKS, fs.NUM_INODE_BLOCKS, fs.NUM_BITMAP_BLOCKS, fs.NUM_DATA_BLOCKS, fs.TOTAL_BLOCKS });
 
-    const file_name = args.next() orelse {
-        debug.panic("Usage: makefs <file_name>", .{});
-    };
+    const file_name = "fs.img";
 
     disk = std.fs.cwd().createFile(file_name, .{ .read = true }) catch |err| {
         debug.panic("Failed to create disk: {s}", .{@errorName(err)});

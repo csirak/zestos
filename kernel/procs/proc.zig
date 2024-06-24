@@ -195,6 +195,32 @@ pub fn yield(self: *Self) void {
     self.lock.release();
 }
 
+pub fn fork(self: *Self) !void {
+    const newProc = try alloc();
+    self.pagetable.?.copy(newProc.pagetable.?, self.mem_size) catch |e| {
+        newProc.free() catch unreachable;
+        newProc.lock.release();
+        return e;
+    };
+
+    newProc.mem_size = self.mem_size;
+    newProc.trapframe.?.* = self.trapframe.?.*;
+    lib.strCopy(newProc.name[0..], self.name[0..], 20);
+    const pid = newProc.pid;
+
+    newProc.lock.release();
+
+    proc_glob_lock.acquire();
+    newProc.parent = self;
+    proc_glob_lock.release();
+
+    newProc.lock.acquire();
+    newProc.state = .Runnable;
+    newProc.lock.release();
+
+    return pid;
+}
+
 pub fn exit(self: *Self, status: i64) void {
     if (self == init_proc) {
         lib.kpanic("init process exit");
