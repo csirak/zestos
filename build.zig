@@ -73,6 +73,12 @@ pub fn build(b: *std.Build) void {
         "virt",
         "-kernel",
         "./zig-out/bin/kernel",
+        "-global",
+        "virtio-mmio.force-legacy=false",
+        "-drive",
+        "file=fs.img,if=none,format=raw,id=x0",
+        "-device",
+        "virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0",
     };
 
     const run_cmd = b.addSystemCommand(&run_cmd_str);

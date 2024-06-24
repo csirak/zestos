@@ -94,6 +94,23 @@ pub fn unMapPages(self: *Self, virtual_address: u64, num_pages: u64, freePages: 
     }
 }
 
+pub fn copy(self: *Self, dest: *Self, size: u64) !void {
+    var i: u64 = 0;
+    while (i < size) : (i += riscv.PGSIZE) {
+        const pte = try self.getPhysAddrFromVa(i, false);
+        if (pte.* & mem.PTE_V != 0) {
+            lib.kpanic("page table entry is not valid\n");
+        }
+
+        const phys_address_page: Table = @ptrCast(pageTableEntryToPhysAddr(pte.*));
+        const flags = pageTableEntryFlags(pte.*);
+        const page: Table = @ptrCast(try KMem.alloc());
+
+        @memcpy(page, phys_address_page);
+        try dest.mapPages(i, @intFromPtr(page), riscv.PGSIZE, flags);
+    }
+}
+
 pub inline fn setSatp(self: *Self) void {
     riscv.w_satp(self.getAsSatp());
 }
