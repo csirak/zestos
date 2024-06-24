@@ -4,6 +4,9 @@ const lib = @import("lib.zig");
 const Spinlock = @import("locks/spinlock.zig");
 const StdOut = @import("io/stdout.zig");
 const Procedure = @import("procs/proc.zig");
+const Syscalls = @import("procs/syscall.zig");
+
+const Interrupt = enum { Timer, Software, External, Syscall, Unknown };
 
 var ticks: u64 = 0;
 var tickslock: Spinlock = undefined;
@@ -12,8 +15,6 @@ extern fn kernelvec() void;
 extern fn uservec() void;
 extern fn userret() void;
 extern fn trampoline() void;
-
-export fn kerneltrap() void {}
 
 pub fn init() void {
     tickslock = Spinlock.init("time");
@@ -24,12 +25,50 @@ pub fn coreInit() void {
 }
 
 pub fn userTrap() void {
-    const proc = Procedure.current();
-    lib.printInt(proc.trapframe.?.a7);
+    if (riscv.r_sstatus() & riscv.SSTATUS_SPP != 0) {
+        lib.kpanic("user trap not from user mode");
+    }
+
+    riscv.w_stvec(@intFromPtr(&kernelvec));
+
+    const proc = Procedure.current().?;
+
+    proc.trapframe.?.epc = riscv.r_sepc();
+
+    const reason = getSupervisorInterrupt();
+
+    switch (reason) {
+        .Syscall => {
+            if (proc.isKilled()) {
+                proc.exit(-1);
+            }
+
+            // 32 bit instruction size
+            proc.trapframe.?.epc += 4;
+            riscv.intr_on();
+            Syscalls.doSyscall();
+        },
+
+        .Timer => {
+            lib.println("timer");
+            proc.yield();
+        },
+
+        else => {
+            lib.kpanic("Unknown interrupt");
+            proc.setKilled();
+        },
+    }
+
+    if (proc.isKilled()) {
+        proc.exit(-1);
+    }
+
+    userTrapReturn();
 }
 
 pub fn userTrapReturn() void {
-    var proc = Procedure.current();
+    var proc = Procedure.current().?;
     // deactivate until in user mode
     riscv.intr_off();
 
@@ -41,7 +80,7 @@ pub fn userTrapReturn() void {
     proc.trapframe.?.kernel_trap = @intFromPtr(&userTrap);
     proc.trapframe.?.kernel_hartid = riscv.r_tp();
 
-    // turn on user interrupts and set previous mode
+    // clear current interrupt turn on user interrupts and set previous mode
     const sstatus = riscv.r_sstatus();
     const user_sstatus = (sstatus & ~riscv.SSTATUS_SPP) | riscv.SSTATUS_SPIE;
     riscv.w_sstatus(user_sstatus);
@@ -50,7 +89,78 @@ pub fn userTrapReturn() void {
     const satp = proc.pagetable.?.getAsSatp();
 
     const user_ret_trampoline = riscv.TRAMPOLINE + @intFromPtr(&userret) - @intFromPtr(&trampoline);
-    const user_ret: *const fn (u64) void = @ptrFromInt(user_ret_trampoline);
 
+    const user_ret: *const fn (u64) void = @ptrFromInt(user_ret_trampoline);
     user_ret(satp);
+}
+
+pub fn forkReturn() void {
+    // make sure to boot fs when running
+    const proc = Procedure.current().?;
+    proc.lock.release();
+    userTrapReturn();
+}
+
+export fn kerneltrap() void {
+    const sepc = riscv.r_sepc();
+    // const scause = riscv.r_scause();
+    const sstatus = riscv.r_sstatus();
+    const current = Procedure.current();
+
+    if (sstatus & riscv.SSTATUS_SPP == 0) {
+        lib.kpanic("Not from Supervisor Mode");
+    }
+
+    if (riscv.intr_get()) {
+        lib.kpanic("Interrupts on");
+    }
+
+    const cause = getSupervisorInterrupt();
+
+    if (cause == .Unknown) {
+        lib.kpanic("Unknown interrupt");
+    }
+
+    if (current) |proc| {
+        if (proc.state == .Running and cause == .Timer) {
+            proc.yield();
+        }
+    }
+
+    riscv.w_sepc(sepc);
+    riscv.w_sstatus(sstatus);
+}
+
+// must be called in kernel mode with stvec set to kernelvec
+fn getSupervisorInterrupt() Interrupt {
+    const cause = riscv.r_scause();
+
+    if (cause == riscv.SCAUSE_TRAP_SYSCALL) {
+        return .Syscall;
+    }
+
+    if (cause & riscv.SCAUSE_TYPE_MASK == 0) {
+        return .Unknown;
+    }
+
+    // Interrupt
+    // for now only software interrupt is a timer interrupt
+
+    switch (cause & riscv.SCAUSE_FLAG_MASK) {
+        riscv.SCAUSE_INT_SOFTWARE => {
+            if (riscv.cpuid() == 0) {
+                tickslock.acquire();
+                ticks += 1;
+                Procedure.wakeup(@intFromPtr(&ticks));
+                tickslock.release();
+            }
+            return .Timer;
+        },
+        riscv.SCAUSE_INT_PLIC => {
+            return .External;
+        },
+        else => {
+            return .Unknown;
+        },
+    }
 }

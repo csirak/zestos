@@ -19,7 +19,7 @@ pub const TIMER_INTERVAL = 1000000;
 pub const CLINT_MTIME: *u64 = @ptrFromInt(CLINT + 0xBFF8);
 
 pub inline fn CLINT_MTIMECMP(hartid: u64) *u64 {
-    return @ptrFromInt(CLINT + 0x4000 + 8 * (hartid));
+    return @ptrFromInt(CLINT + 0x4000 + 8 * hartid);
 }
 
 pub const MAXVA: u64 = (1 << (9 + 9 + 9 + 12 - 1));
@@ -49,9 +49,9 @@ pub const MIE_MTIE: u64 = 1 << 7; // timer
 pub const MIE_MSIE: u64 = 1 << 3; // software
 
 // Supervisor Interrupt Enable
-pub const SIE_SEIE: u64 = 1 << 9; // external
-pub const SIE_STIE: u64 = 1 << 5; // timer
 pub const SIE_SSIE: u64 = 1 << 1; // software
+pub const SIE_STIE: u64 = 1 << 5; // timer
+pub const SIE_SEIE: u64 = 1 << 9; // external
 
 // Supervisor Status Register, sstatus
 pub const SSTATUS_SPP: u64 = 1 << 8; // Previous mode, 1=Supervisor, 0=User
@@ -59,6 +59,13 @@ pub const SSTATUS_SPIE: u64 = 1 << 5; // Supervisor Previous Interrupt Enable
 pub const SSTATUS_UPIE: u64 = 1 << 4; // User Previous Interrupt Enable
 pub const SSTATUS_SIE: u64 = 1 << 1; // Supervisor Interrupt Enable
 pub const SSTATUS_UIE: u64 = 1 << 0; // User Interrupt Enable
+
+pub const SCAUSE_TYPE_MASK: u64 = 1 << 63; // Interrupt
+pub const SCAUSE_FLAG_MASK: u64 = 0xFF; // Status
+
+pub const SCAUSE_INT_SOFTWARE: u64 = 1;
+pub const SCAUSE_TRAP_SYSCALL: u64 = 8;
+pub const SCAUSE_INT_PLIC: u64 = 9;
 
 pub inline fn r_mstatus() u64 {
     var x: u64 = 0;
@@ -102,6 +109,14 @@ pub inline fn w_sepc(x: u64) void {
         :
         : [x] "r" (x),
     );
+}
+
+pub inline fn r_sepc() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], sepc"
+        : [x] "=r" (x),
+    );
+    return x;
 }
 
 pub inline fn mret() void {
@@ -166,6 +181,22 @@ pub inline fn w_sie(x: u64) void {
         :
         : [x] "r" (x),
     );
+}
+
+pub inline fn r_scause() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], scause"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
+pub inline fn r_stval() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], stval"
+        : [x] "=r" (x),
+    );
+    return x;
 }
 
 // Supervisor device interrupts

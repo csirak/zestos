@@ -1,14 +1,9 @@
 const std = @import("std");
-const Target = std.Target;
-const CrossTarget = std.zig.CrossTarget;
-const Feature = std.Target.Cpu.Feature;
-
-const objFiles = [_][]u8{"main"};
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{
-        .cpu_arch = Target.Cpu.Arch.riscv64,
-        .os_tag = Target.Os.Tag.freestanding,
+        .cpu_arch = .riscv64,
+        .os_tag = .freestanding,
     } });
 
     const optimize = b.standardOptimizeOption(.{

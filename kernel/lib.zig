@@ -54,10 +54,12 @@ pub fn kpanic(msg: []const u8) noreturn {
     print("kernel panic: ");
     println(msg);
     while (true) {}
+    unreachable;
 }
 
 pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
-    for (0..size) |i| {
+    const len = @min(src.len, size);
+    for (0..len) |i| {
         dst[i] = src[i];
     }
 }
