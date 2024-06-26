@@ -3,7 +3,7 @@ const lib = @import("lib.zig");
 
 const Spinlock = @import("locks/spinlock.zig");
 const StdOut = @import("io/stdout.zig");
-const Procedure = @import("procs/proc.zig");
+const Process = @import("procs/proc.zig");
 const Syscalls = @import("procs/syscall.zig");
 
 const Interrupt = enum { Timer, Software, External, Syscall, Unknown };
@@ -31,7 +31,7 @@ pub fn userTrap() void {
 
     riscv.w_stvec(@intFromPtr(&kernelvec));
 
-    const proc = Procedure.current().?;
+    const proc = Process.currentOrPanic();
 
     proc.trapframe.?.epc = riscv.r_sepc();
 
@@ -68,7 +68,7 @@ pub fn userTrap() void {
 }
 
 pub fn userTrapReturn() void {
-    var proc = Procedure.current().?;
+    var proc = Process.currentOrPanic();
     // deactivate until in user mode
     riscv.intr_off();
 
@@ -96,7 +96,7 @@ pub fn userTrapReturn() void {
 
 pub fn forkReturn() void {
     // make sure to boot fs when running
-    const proc = Procedure.current().?;
+    const proc = Process.currentOrPanic();
     proc.lock.release();
     userTrapReturn();
 }
@@ -105,7 +105,7 @@ export fn kerneltrap() void {
     const sepc = riscv.r_sepc();
     // const scause = riscv.r_scause();
     const sstatus = riscv.r_sstatus();
-    const current = Procedure.current();
+    const current = Process.current();
 
     if (sstatus & riscv.SSTATUS_SPP == 0) {
         lib.kpanic("Not from Supervisor Mode");
@@ -151,7 +151,7 @@ fn getSupervisorInterrupt() Interrupt {
             if (riscv.cpuid() == 0) {
                 tickslock.acquire();
                 ticks += 1;
-                Procedure.wakeup(@intFromPtr(&ticks));
+                Process.wakeup(&ticks);
                 tickslock.release();
             }
             return .Timer;

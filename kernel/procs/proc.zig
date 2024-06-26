@@ -5,10 +5,18 @@ const lib = @import("../lib.zig");
 
 const Cpu = @import("../cpu.zig");
 const Trap = @import("../trap.zig");
-const KMem = @import("../mem/kmem.zig");
+
 const Spinlock = @import("../locks/spinlock.zig");
+
+const KMem = @import("../mem/kmem.zig");
 const PageTable = @import("../mem/pagetable.zig");
+
 const StdOut = @import("../io/stdout.zig");
+
+const fs = @import("../fs/fs.zig");
+const File = @import("../fs/file.zig");
+const INodeTable = @import("../fs/inodetable.zig");
+const INode = @import("../fs/inode.zig");
 
 const Self = @This();
 
@@ -111,7 +119,8 @@ parent: *Self,
 kstackPtr: u64,
 mem_size: u64,
 pagetable: ?PageTable,
-
+cwd: *INode,
+open_files: [fs.MAX_OPEN_FILES]?*File,
 trapframe: ?*TrapFrame,
 call_context: SysCallContext,
 name: [20]u8,
@@ -181,6 +190,13 @@ pub fn isKilled(self: *Self) bool {
     return killed;
 }
 
+pub fn getPid(self: *Self) u64 {
+    self.lock.acquire();
+    const pid = self.pid;
+    self.lock.release();
+    return pid;
+}
+
 pub fn setKilled(self: *Self) void {
     self.lock.acquire();
     self.killed = true;
@@ -205,6 +221,10 @@ pub fn fork(self: *Self) !void {
 
     newProc.mem_size = self.mem_size;
     newProc.trapframe.?.* = self.trapframe.?.*;
+    newProc.trapframe.?.a0 = 0;
+
+    newProc.cwd = try INodeTable.duplicate(self.cwd);
+
     lib.strCopy(newProc.name[0..], self.name[0..], 20);
     const pid = newProc.pid;
 
@@ -221,13 +241,31 @@ pub fn fork(self: *Self) !void {
     return pid;
 }
 
+// atomically lock process and release external lock
+// process will be scheduled to run again when awakened
+// reacquire lock
+pub fn sleep(self: *Self, channel: *anyopaque, passed_lock: *Spinlock) void {
+    self.lock.acquire();
+    passed_lock.release();
+
+    self.channel = @intFromPtr(channel);
+    self.state = .Sleeping;
+
+    self.switchToScheduler();
+
+    self.channel = 0;
+
+    self.lock.release();
+    passed_lock.acquire();
+}
+
 pub fn exit(self: *Self, status: i64) void {
     if (self == init_proc) {
         lib.kpanic("init process exit");
     }
 
     proc_glob_lock.acquire();
-    wakeup(@intFromPtr(self.parent));
+    wakeup(self.parent);
 
     self.lock.acquire();
     self.exit_status = status;
@@ -255,6 +293,7 @@ pub fn userInit() !void {
     proc.state = .Runnable;
 
     lib.strCopy(proc.name[0..], "init", 4);
+    proc.cwd = try INodeTable.namedInode("/");
     proc.lock.release();
 }
 
@@ -277,10 +316,16 @@ pub fn scheduler() void {
     }
 }
 
-pub fn wakeup(channel: u64) void {
+pub fn copyToUser(dest: u64, src: *[]u8, size: u64) !void {
+    try currentOrPanic().pagetable.?.copyInto(dest, src, size);
+}
+
+/// not a struct function because for now it's used by the scheduler because
+/// the current process doesn't need any information on the process to wake up
+pub fn wakeup(channel: *anyopaque) void {
     const cur = current();
     for (&PROCS) |*proc| {
-        if (proc != cur and proc.channel == channel) {
+        if (proc != cur and proc.channel == @intFromPtr(channel)) {
             proc.lock.acquire();
             proc.state = .Runnable;
             proc.lock.release();
@@ -290,19 +335,21 @@ pub fn wakeup(channel: u64) void {
 
 pub fn current() ?*Self {
     const cpu = Cpu.current();
-    var proc: ?*Self = undefined;
     cpu.pushInterrupt();
-    proc = cpu.proc;
-    cpu.popInterrupt();
+    defer cpu.popInterrupt();
+    return cpu.proc;
+}
+
+pub fn currentOrPanic() *Self {
+    const proc = current() orelse lib.kpanic("No current process");
     return proc;
 }
 
-fn allocPid() u64 {
+pub fn allocPid() u64 {
     pid_lock.acquire();
-    const out = nextpid;
-    nextpid += 1;
-    pid_lock.release();
-    return out;
+    defer pid_lock.release();
+    defer nextpid += 1;
+    return nextpid;
 }
 
 // proc lock is released in scheduler

@@ -33,6 +33,24 @@ pub fn println(s: []const u8) void {
     put_char('\n');
 }
 
+pub fn printNullTerm(ptr: [*]const u8) void {
+    var i: u16 = 0;
+    while (ptr[i] != 0) : (i += 1) {}
+    print(ptr[0..i]);
+}
+
+pub fn printlnNullTerm(ptr: [*]const u8) void {
+    printNullTerm(ptr);
+    put_char('\n');
+}
+
+pub fn printlnNullTermWrapped(ptr: [*]const u8) void {
+    put_char('{');
+    printNullTerm(ptr);
+    put_char('}');
+    put_char('\n');
+}
+
 pub fn printErr(e: anyerror) void {
     println(@errorName(e));
 }
@@ -62,6 +80,10 @@ pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     for (0..len) |i| {
         dst[i] = src[i];
     }
+}
+
+pub fn strEq(a: [*]u8, b: [*]const u8, size: u64) bool {
+    return std.mem.eql(u8, a[0..size], b[0..size]);
 }
 
 pub fn coreLog(comptime s: []const u8) void {

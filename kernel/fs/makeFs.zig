@@ -82,11 +82,10 @@ fn writeINode(inum: u16, inode: fs.DiskINode) void {
 fn readINode(inum: u16, inode: *fs.DiskINode) void {
     var buffer: fs.Block = undefined;
     const block_num = fs.inodeBlockNum(inum);
-    const index = inum % fs.INODES_PER_BLOCK;
-    const block_offset = index * @sizeOf(fs.DiskINode);
-
     readBlock(block_num, &buffer);
 
+    const index = inum % fs.INODES_PER_BLOCK;
+    const block_offset = index * @sizeOf(fs.DiskINode);
     const inode_bytes = buffer[block_offset..][0..@sizeOf(fs.DiskINode)];
     const buffer_inode: *const fs.DiskINode = @alignCast(@ptrCast(inode_bytes));
     inode.* = buffer_inode.*;

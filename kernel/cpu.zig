@@ -1,6 +1,6 @@
 const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
-const Procedure = @import("procs/proc.zig");
+const Process = @import("procs/proc.zig");
 
 const Self = @This();
 
@@ -8,8 +8,8 @@ var cpus: [riscv.NCPU]Self = undefined;
 
 interrupts_enabled: bool,
 disabled_depth: u16,
-proc: ?*Procedure,
-call_context: Procedure.SysCallContext,
+proc: ?*Process,
+call_context: Process.SysCallContext,
 
 pub fn pushInterrupt(self: *Self) void {
     const old = riscv.intr_get();
