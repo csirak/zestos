@@ -5,6 +5,7 @@ const Spinlock = @import("locks/spinlock.zig");
 const StdOut = @import("io/stdout.zig");
 const Process = @import("procs/proc.zig");
 const Syscalls = @import("procs/syscall.zig");
+const Virtio = @import("fs/virtio.zig");
 
 const Interrupt = enum { Timer, Software, External, Syscall, Unknown };
 
@@ -52,6 +53,10 @@ pub fn userTrap() void {
         .Timer => {
             lib.println("timer");
             proc.yield();
+        },
+
+        .External => {
+            lib.println("external");
         },
 
         else => {
@@ -140,13 +145,16 @@ fn getSupervisorInterrupt() Interrupt {
     }
 
     if (cause & riscv.SCAUSE_TYPE_MASK == 0) {
+        lib.println("unknown trap");
+        lib.printInt(cause);
         return .Unknown;
     }
 
     // Interrupt
     // for now only software interrupt is a timer interrupt
 
-    switch (cause & riscv.SCAUSE_FLAG_MASK) {
+    const flag = cause & riscv.SCAUSE_FLAG_MASK;
+    switch (flag) {
         riscv.SCAUSE_INT_SOFTWARE => {
             if (riscv.cpuid() == 0) {
                 tickslock.acquire();
@@ -157,10 +165,32 @@ fn getSupervisorInterrupt() Interrupt {
             return .Timer;
         },
         riscv.SCAUSE_INT_PLIC => {
+            plicInterrupt();
             return .External;
         },
         else => {
+            lib.print("unknown fault: ");
+            lib.printInt(flag);
             return .Unknown;
         },
+    }
+}
+
+fn plicInterrupt() void {
+    const interrupt_id = riscv.plic_claim();
+
+    switch (interrupt_id) {
+        riscv.VIRTIO0_IRQ => {
+            Virtio.diskInterrupt();
+        },
+        else => {
+            lib.println("plic interrupt");
+            lib.printInt(interrupt_id);
+            lib.kpanic("Unknown PLIC interrupt");
+        },
+    }
+
+    if (interrupt_id != 0) {
+        riscv.plic_complete(interrupt_id);
     }
 }

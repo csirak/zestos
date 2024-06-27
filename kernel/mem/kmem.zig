@@ -48,16 +48,15 @@ pub fn freeRange(pa_start: u64, pa_end: u64) void {
 }
 
 pub fn alloc() !*u64 {
-    lock.acquire();
-    const p = freed orelse undefined;
-    if (p == undefined) {
-        return error.MemoryUnavailable;
-    }
-    freed = p.*.next;
-    lock.release();
-    const page: *[riscv.PGSIZE]u8 = @ptrCast(p);
+    const page = try getFreePage();
     @memset(page, 5);
-    return @ptrCast(p);
+    return @alignCast(@ptrCast(page));
+}
+
+pub fn allocZeroed() !*u64 {
+    const page = try getFreePage();
+    @memset(page, 0);
+    return @alignCast(@ptrCast(page));
 }
 
 pub fn free(pa: u64) void {
@@ -90,4 +89,15 @@ fn mapKernelPages() !void {
         const virtual_address = riscv.KSTACK(i);
         try pagetable.mapPages(virtual_address, @intFromPtr(page), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
     }
+}
+
+fn getFreePage() !*[riscv.PGSIZE]u8 {
+    lock.acquire();
+    const p = freed orelse undefined;
+    if (p == undefined) {
+        return error.MemoryUnavailable;
+    }
+    freed = p.*.next;
+    lock.release();
+    return @ptrCast(p);
 }

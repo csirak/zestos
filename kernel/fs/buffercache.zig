@@ -1,5 +1,6 @@
 const fs = @import("fs.zig");
 const lib = @import("../lib.zig");
+const tools = @import("../tools/blockdump.zig");
 
 const Buffer = @import("buffer.zig");
 const BufferCache = @import("buffercache.zig");
@@ -17,10 +18,11 @@ pub fn init() void {
     head.next = &head;
     head.prev = &head;
 
-    for (&buffers) |*buffer| {
+    for (&buffers, 0..) |*buffer, i| {
         buffer.next = head.next;
         buffer.prev = &head;
-        buffer.sleeplock = Sleeplock.init("buffer");
+
+        buffer.sleeplock = Sleeplock.initId("buffer: ", @intCast(i));
         head.next.prev = buffer;
         head.next = buffer;
     }

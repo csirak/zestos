@@ -16,7 +16,7 @@ pub const ElfHeader = extern struct {
     section_names_index: u16,
 };
 
-const ProgramHeaderType = enum(u32) {
+pub const ProgramHeaderType = enum(u32) {
     LOAD = 1,
     DYNAMIC = 2,
     INTERP = 3,
@@ -25,15 +25,15 @@ const ProgramHeaderType = enum(u32) {
     PHDR = 6,
 };
 
-const ProgramHeaderFlag = enum(u32) {
+pub const ProgramHeaderFlag = enum(u32) {
     EXECUTABLE = 1,
     WRITE = 2,
     READ = 4,
 };
 
 pub const ProgramHeader = extern struct {
-    typ: u32,
-    flags: u32,
+    typ: ProgramHeaderType,
+    flags: ProgramHeaderFlag,
     offset: u64,
     virtual_addr: u64,
     physical_addr: u64,
@@ -41,3 +41,5 @@ pub const ProgramHeader = extern struct {
     memory_size: u64,
     alignment: u64,
 };
+
+pub const MAGIC = 0x464C457F;

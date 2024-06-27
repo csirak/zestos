@@ -95,7 +95,7 @@ var lock: Spinlock = undefined;
 var descriptors: *[NUM_DESC]Descriptor = undefined;
 var available: *Available = undefined;
 var used: *Used = undefined;
-var used_index: u16 = undefined;
+var used_index: u16 = 0;
 
 var free: [NUM_DESC]u8 = undefined;
 var free_index: u16 = undefined;
@@ -205,7 +205,9 @@ pub fn diskInterrupt() void {
     lock.acquire();
     defer lock.release();
 
-    virtioRegister(VIRTIO_MMIO_INTERRUPT_ACK).* = virtioRegister(VIRTIO_MMIO_INTERRUPT_STATUS).* & 3;
+    const status = virtioRegister(VIRTIO_MMIO_INTERRUPT_STATUS).*;
+
+    virtioRegister(VIRTIO_MMIO_INTERRUPT_ACK).* = status & 0x3;
     @fence(.seq_cst);
 
     while (used_index != used.idx) {
@@ -219,7 +221,7 @@ pub fn diskInterrupt() void {
 
         const buf = info[id].buffer;
         buf.disk_owned = false;
-        Process.wakeup(&buf);
+        Process.wakeup(buf);
         used_index += 1;
     }
 }
@@ -253,9 +255,10 @@ fn read_write(buf: *Buffer, write: bool) void {
     descriptors[indexes[0]].flags = VRING_DESC_F_NEXT;
     descriptors[indexes[0]].next = indexes[1];
 
+    const flags: u16 = if (write) 0 else VRING_DESC_F_WRITE;
     descriptors[indexes[1]].addr = @intFromPtr(&buf.data);
     descriptors[indexes[1]].len = fs.BLOCK_SIZE;
-    descriptors[indexes[1]].flags = if (write) 0 else VRING_DESC_F_WRITE;
+    descriptors[indexes[1]].flags = flags | VRING_DESC_F_NEXT;
     descriptors[indexes[1]].next = indexes[2];
 
     info[indexes[0]].status = 0xFF; // will be 0 on success

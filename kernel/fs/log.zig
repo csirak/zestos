@@ -14,7 +14,7 @@ const Header = struct {
 var lock: Spinlock = undefined;
 var size: u16 = 0;
 var active_operations: u16 = 0;
-var committing: u16 = 0;
+var committing: bool = false;
 var start_block: u16 = 0;
 var device: u16 = 0;
 
@@ -63,18 +63,18 @@ fn writeHeader() void {
     BufferCache.write(buffer);
 }
 
-fn writeCacheToLog() !void {
+fn writeCacheToLog() void {
     for (0..log_header.num_entries) |log_index| {
         const log_block_index = start_block + log_index + 1;
         const cache_block_num = log_header.blocks[log_index];
 
-        const log_block_buffer = BufferCache.read(device, log_block_index);
+        const log_block_buffer = BufferCache.read(device, @intCast(log_block_index));
         const cache_block_buffer = BufferCache.readFromCache(device, cache_block_num);
 
         defer BufferCache.release(log_block_buffer);
         defer BufferCache.release(cache_block_buffer);
 
-        @memcpy(log_block_buffer.data, cache_block_buffer.data);
+        @memcpy(&log_block_buffer.data, &cache_block_buffer.data);
         BufferCache.write(log_block_buffer);
     }
 }
@@ -85,13 +85,13 @@ fn writeLogToDisk(recovering: bool) void {
         const log_block_index = start_block + log_index + 1;
         const block_num = log_header.blocks[log_index];
 
-        const log_block_buffer = BufferCache.read(device, log_block_index);
+        const log_block_buffer = BufferCache.read(device, @intCast(log_block_index));
         const disk_block_buffer = BufferCache.read(device, block_num);
 
         defer BufferCache.release(log_block_buffer);
         defer BufferCache.release(disk_block_buffer);
 
-        @memcpy(disk_block_buffer.data, log_block_buffer.data);
+        @memcpy(&disk_block_buffer.data, &log_block_buffer.data);
         if (recovering) {
             BufferCache.removeRef(disk_block_buffer);
         }
@@ -107,11 +107,11 @@ pub fn beginTx() void {
 
     while (true) {
         if (committing) {
-            proc.sleep(&@This(), &lock);
+            proc.sleep(&log_header, &lock);
         }
         const blocks_in_use = log_header.num_entries + (active_operations + 1) * fs.MAX_BLOCKS_PER_OP;
         if (blocks_in_use > fs.NUM_LOG_BLOCKS) {
-            proc.sleep(&@This(), &lock);
+            proc.sleep(&log_header, &lock);
         } else {
             break;
         }
@@ -136,7 +136,7 @@ pub fn endTx() void {
         lock.acquire();
         committing = false;
     } else {
-        Process.wakeup(&@This());
+        Process.wakeup(&log_header);
     }
 }
 

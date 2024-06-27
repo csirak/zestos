@@ -12,8 +12,8 @@ var inodes: [fs.NUM_INODES]INode = undefined;
 
 pub fn init() void {
     lock = Spinlock.init("inode table");
-    for (&inodes) |*inode| {
-        inode.sleep_lock = Sleeplock.init("inode table");
+    for (&inodes, 0..) |*inode, i| {
+        inode.sleeplock = Sleeplock.initId("inode", @intCast(i));
     }
 }
 
@@ -44,29 +44,41 @@ pub fn get(device: u16, inum: u16) *INode {
 
 pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode {
     var current = if (path[0] == '/') get(fs.ROOT_DEVICE, fs.ROOT_INODE) else duplicate(Process.currentOrPanic().cwd);
-    var rest = getNextPathElem(path, name);
-    if (rest.?[0] == 0) {
+    if (path[0] == '/' and path[1] == 0) {
+        current.release();
         return current;
     }
-    while (rest != null) : (rest = getNextPathElem(rest.?, name)) {
+    var rest: u16 = getNextPathElem(path, name, 0);
+    while (rest < fs.DIR_NAME_SIZE) {
         current.lock();
-        defer current.release();
-        if (current.disk_inode.typ != .Directory) {
+        if (current.disk_inode.typ != fs.INODE_DIR) {
             removeRef(current);
+            current.release();
             return error.NotDirectory;
         }
-        if (get_parent and rest.?[0] == 0) {
+
+        if (get_parent and rest == 0xFFFF) {
             return current;
         }
+        const new_inode = dirLookUp(current, name, null) orelse {
+            removeRef(current);
+            current.release();
+            return error.NotFound1;
+        };
 
-        current = dirLookUp(current, name, null) orelse return error.NotFound;
+        current.release();
+        current = new_inode;
+        if (path[rest] == 0) {
+            break;
+        }
+        rest = getNextPathElem(path[rest..], name, rest);
     }
 
     if (get_parent) {
         removeRef(current);
+        current.release();
         return error.NotFound;
     }
-
     return current;
 }
 
@@ -88,12 +100,13 @@ pub fn removeRef(inode: *INode) void {
     inode.reference_count -= 1;
 }
 
-fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8) ?[*:0]const u8 {
-    var i: usize = 0;
-    while (path[i] == '/') : (i += 1) {
-        if (path[i] == 0) {
-            return null;
-        }
+fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
+    var i: u16 = cur_offset;
+    while (path[i] == '/') : (i += 1) {}
+
+    if (path[i] == 0) {
+        lib.println("ITS OVER");
+        return 0xFFFF;
     }
 
     const start = i;
@@ -104,22 +117,26 @@ fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8) ?[*:0]const u8 {
 
     const size = if (i - start > fs.DIR_NAME_SIZE) fs.DIR_NAME_SIZE else i - start;
     @memcpy(name[0..size], path[start..(start + size)]);
-
-    return path[i..];
+    name[size] = 0;
+    return i;
 }
 
 fn dirLookUp(dir: *INode, name: [*:0]const u8, put_offset: ?*u16) ?*INode {
-    if (dir.disk_inode.typ != .Directory) {
+    if (dir.disk_inode.typ != fs.INODE_DIR) {
         return null;
     }
     var offset: u64 = 0;
     var entry: fs.DirEntry = undefined;
 
     while (offset < dir.disk_inode.size) : (offset += @sizeOf(fs.DirEntry)) {
-        _ = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch return null;
+        _ = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
+            lib.printErr(e);
+            return null;
+        };
         if (entry.inum == 0) {
             continue;
         }
+
         if (lib.strEq(&entry.name, name, fs.DIR_NAME_SIZE)) {
             if (put_offset) |po| {
                 po.* = @intCast(offset);

@@ -1,19 +1,23 @@
 const Sleeplock = @import("../locks/sleeplock.zig");
 
-pub const INodeType = enum(u16) { Directory = 1, File, Device, Symlink };
+pub const INODE_DIR = 1;
+pub const INODE_FILE = 2;
+pub const INODE_DEVICE = 3;
+pub const INODE_SYMLINK = 4;
 
 pub const INode = struct {
     device: u32,
     inum: u16,
     reference_count: u16,
-    sleep_lock: Sleeplock,
+    sleeplock: Sleeplock,
     valid: bool,
     disk_inode: DiskINode,
 };
 
 pub const DiskINode = extern struct {
-    typ: INodeType,
-    major: u16 = 0,
+    typ: u16,
+    // debug by searching bin files
+    major: u16 = 0x6969,
     minor: u16 = 0,
     num_links: u16 = 1,
     size: u32 = 0,

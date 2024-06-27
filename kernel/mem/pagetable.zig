@@ -22,11 +22,15 @@ pub fn init() !Self {
     };
 }
 
+pub fn userInit() !void {}
+
 pub fn userFree(self: *Self, size: u64) !void {
     try self.unMapPages(riscv.TRAMPOLINE, 1, false);
     try self.unMapPages(riscv.TRAPFRAME, 1, false);
+
     if (size > 0) {
-        try self.unMapPages(0, mem.pageAlignUp(size), true);
+        const num_pages = mem.pageAlignUp(size) / riscv.PGSIZE;
+        try self.unMapPages(0, num_pages, true);
     }
     try freeTable(self.table);
 }
@@ -111,6 +115,48 @@ pub fn copy(self: *Self, dest: *Self, size: u64) !void {
     }
 }
 
+pub fn userAlloc(self: *Self, old_size: u64, new_size: u64, flags: u16) !u64 {
+    if (new_size < old_size) {
+        return new_size;
+    }
+
+    var aligned_cur_virtual_address = mem.pageAlignDown(old_size);
+
+    while (aligned_cur_virtual_address < new_size) : (aligned_cur_virtual_address += riscv.PGSIZE) {
+        const page = KMem.allocZeroed() catch |e| {
+            _ = try self.userDeAlloc(aligned_cur_virtual_address, old_size);
+            return e;
+        };
+
+        self.mapPages(aligned_cur_virtual_address, @intFromPtr(page), riscv.PGSIZE, mem.PTE_R | mem.PTE_U | flags) catch |e| {
+            KMem.free(@intFromPtr(page));
+            _ = try self.userDeAlloc(aligned_cur_virtual_address, old_size);
+            return e;
+        };
+    }
+    return new_size;
+}
+
+pub fn revokeUserPage(self: *Self, virtual_address: u64) !void {
+    const pte = try self.getPhysAddrFromVa(virtual_address, false);
+    pte.* &= ~(mem.PTE_U);
+}
+
+pub fn userDeAlloc(self: *Self, old_size: u64, new_size: u64) !u64 {
+    if (new_size >= old_size) {
+        return new_size;
+    }
+
+    const new_page_aligned_addr = mem.pageAlignUp(new_size);
+    const num_pages = (mem.pageAlignUp(old_size) - new_page_aligned_addr) / riscv.PGSIZE;
+    if (num_pages == 0) {
+        return new_size;
+    }
+
+    try self.unMapPages(new_page_aligned_addr, num_pages, true);
+    return new_size;
+}
+
 pub fn copyInto(self: *Self, dest: u64, src: *[]u8, size: u64) !void {
     lib.kpanic("not Implemented copyInto");
 
@@ -170,8 +216,7 @@ inline fn physAddrToPTE(address: *u64) u64 {
 }
 
 fn makeTable() !Table {
-    const table: Table = @ptrCast(try KMem.alloc());
-    @memset(table, 0);
+    const table: Table = @ptrCast(try KMem.allocZeroed());
     return table;
 }
 
