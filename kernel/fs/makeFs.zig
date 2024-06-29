@@ -33,7 +33,7 @@ pub fn main() void {
     var root_inode: fs.DiskINode = undefined;
     readINode(root_inum, &root_inode);
 
-    root_inode.size = ((root_inode.size / fs.BLOCK_SIZE) + 1) * fs.BLOCK_SIZE;
+    root_inode.size = (@divFloor(root_inode.size, fs.BLOCK_SIZE) + 1) * fs.BLOCK_SIZE;
     writeINode(root_inum, root_inode);
     bitMapAdd(free_block);
     std.debug.print("blocks used: {d}\n", .{free_block - fs.NUM_META_BLOCKS});
@@ -102,13 +102,13 @@ fn iNodeAppend(inum: u16, bytes: []const u8) void {
 
     var indirect_addrs_cache: ?[fs.INDIRECT_ADDRESS_SIZE]u32 = null;
 
-    const blocks_to_write = (inode.size + bytes.len) / fs.BLOCK_SIZE;
+    const blocks_to_write = @divFloor(inode.size + bytes.len, fs.BLOCK_SIZE);
     if (blocks_to_write > fs.MAX_ADDRESS_SIZE) {
         debug.panic("File offset out of bounds", .{});
     }
 
     while (bytes_left > 0) {
-        const block_index = file_offset / fs.BLOCK_SIZE;
+        const block_index = @divFloor(file_offset, fs.BLOCK_SIZE);
 
         const block_num = num: {
             if (block_index < fs.DIRECT_ADDRESS_SIZE) {
@@ -180,8 +180,8 @@ fn writeBlock(block_num: u64, block: fs.Block) void {
 fn bitMapAdd(blocks: u64) void {
     var buffer: fs.Block = undefined;
     for (0..(blocks)) |block| {
-        const block_index = block / fs.BLOCK_SIZE + fs.SUPER_BLOCK.bmap_start;
-        const byte_index = block / 8;
+        const block_index = @divFloor(block, fs.BLOCK_SIZE) + fs.SUPER_BLOCK.bmap_start;
+        const byte_index = @divFloor(block, 8);
         const bit_index = block % 8;
         readBlock(block_index, &buffer);
         buffer[byte_index] |= @as(u8, 1) << @intCast(bit_index);
@@ -192,7 +192,7 @@ fn bitMapAdd(blocks: u64) void {
 fn addUserProgram() void {
     const local_path = "user/_init";
     debug.print("adding user program\n", .{});
-    const inode = diskINodeAlloc(.File);
+    const inode = diskINodeAlloc(fs.INODE_FILE);
     const dir_entry = fs.dirEntry(inode, "init");
     iNodeAppend(fs.ROOT_INODE, std.mem.asBytes(&dir_entry));
 

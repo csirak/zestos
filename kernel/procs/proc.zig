@@ -275,7 +275,7 @@ pub fn exit(self: *Self, status: i64) void {
 }
 
 pub fn initPageTable(self: *Self) !void {
-    self.pagetable = try getTrapFrameMappedPageTable(self);
+    self.pagetable = try self.getTrapFrameMappedPageTable();
 }
 
 pub fn getTrapFrameMappedPageTable(self: *Self) !PageTable {
@@ -302,7 +302,7 @@ pub fn userInit() !void {
     init_proc = proc;
 
     // allocate code memory
-    const page: riscv.Page = @ptrCast(try KMem.allocZeroed());
+    const page: *riscv.Page = @ptrCast(try KMem.allocZeroed());
     try proc.pagetable.?.mapPages(
         0,
         @intFromPtr(page),

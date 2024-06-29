@@ -56,15 +56,15 @@ pub const NUM_LOG_BLOCKS = 3 * MAX_BLOCKS_PER_OP;
 pub const BUFFER_CACHE_SIZE = 3 * MAX_BLOCKS_PER_OP;
 
 pub const DIRECT_ADDRESS_SIZE = 12;
-pub const INDIRECT_ADDRESS_SIZE = BLOCK_SIZE / @sizeOf(u32);
+pub const INDIRECT_ADDRESS_SIZE = @divExact(BLOCK_SIZE, @sizeOf(u32));
 pub const MAX_ADDRESS_SIZE = DIRECT_ADDRESS_SIZE + INDIRECT_ADDRESS_SIZE;
 
 pub const SUPER_BLOCK_INDEX = 1;
 pub const BOOT_AND_SUPER_BLOCK_OFFSET = 2;
 
-pub const INODES_PER_BLOCK = BLOCK_SIZE / @sizeOf(DiskINode);
-pub const NUM_BITMAP_BLOCKS = (TOTAL_BLOCKS / BITS_PER_BLOCK) + 1;
-pub const NUM_INODE_BLOCKS = (INODES_NUM / INODES_PER_BLOCK) + 1;
+pub const INODES_PER_BLOCK = @divExact(BLOCK_SIZE, @sizeOf(DiskINode));
+pub const NUM_BITMAP_BLOCKS = @divFloor(TOTAL_BLOCKS, BITS_PER_BLOCK) + 1;
+pub const NUM_INODE_BLOCKS = @divFloor(INODES_NUM, INODES_PER_BLOCK) + 1;
 pub const NUM_META_BLOCKS = 2 + NUM_LOG_BLOCKS + NUM_INODE_BLOCKS + NUM_BITMAP_BLOCKS;
 pub const NUM_DATA_BLOCKS = TOTAL_BLOCKS - NUM_META_BLOCKS;
 
@@ -86,11 +86,11 @@ pub const SUPER_BLOCK: SuperBlock = .{
 };
 
 pub inline fn inodeBlockNum(inum: u16) u16 {
-    return @intCast((inum) / INODES_PER_BLOCK + SUPER_BLOCK.inode_start);
+    return @intCast((@divFloor(inum, INODES_PER_BLOCK)) + SUPER_BLOCK.inode_start);
 }
 
 pub inline fn bitMapBlockNum(block_num: u16) u16 {
-    return @intCast((block_num) / BITS_PER_BLOCK + SUPER_BLOCK.bmap_start);
+    return @intCast((@divFloor(block_num, BITS_PER_BLOCK)) + SUPER_BLOCK.bmap_start);
 }
 
 pub inline fn dirEntry(inum: u16, name: []const u8) DirEntry {

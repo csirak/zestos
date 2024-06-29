@@ -91,7 +91,7 @@ fn mapKernelPages() !void {
     }
 }
 
-fn getFreePage() !*[riscv.PGSIZE]u8 {
+fn getFreePage() !*riscv.Page {
     lock.acquire();
     const p = freed orelse undefined;
     if (p == undefined) {

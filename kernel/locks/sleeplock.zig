@@ -41,7 +41,6 @@ pub fn acquire(self: *Self) void {
 
     const proc = Process.currentOrPanic();
     while (self.locked) {
-        lib.println("Sleeping");
         proc.sleep(self, &self.lock);
     }
     self.locked = true;

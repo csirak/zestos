@@ -63,6 +63,7 @@ pub fn read(dev: u16, block_num: u16) *Buffer {
         Virtio.readTo(buffer);
         buffer.valid = true;
     }
+
     return buffer;
 }
 
@@ -131,7 +132,7 @@ pub fn allocDiskBlock(device: u16) u16 {
             const block_index: u16 = @intCast(bi);
             const block_num = bitmap_block + block_index;
             const mask = @as(u8, 1) << @intCast(block_num % 8);
-            const byte_ptr = &bitmap_buffer.data[block_index / 8];
+            const byte_ptr = &bitmap_buffer.data[@divFloor(block_index, 8)];
 
             if (byte_ptr.* & mask == 0) {
                 byte_ptr.* |= mask;

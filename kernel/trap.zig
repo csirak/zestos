@@ -66,6 +66,7 @@ pub fn userTrap() void {
     }
 
     if (proc.isKilled()) {
+        lib.println("killed");
         proc.exit(-1);
     }
 
@@ -124,6 +125,7 @@ export fn kerneltrap() void {
 
     if (cause == .Unknown) {
         lib.kpanic("Unknown interrupt");
+        lib.printInt(cause);
     }
 
     if (current) |proc| {
@@ -146,7 +148,8 @@ fn getSupervisorInterrupt() Interrupt {
 
     if (cause & riscv.SCAUSE_TYPE_MASK == 0) {
         lib.println("unknown trap");
-        lib.printInt(cause);
+        lib.printAndInt("cause: ", cause);
+        lib.printAndInt("sepc: ", riscv.r_sepc());
         return .Unknown;
     }
 

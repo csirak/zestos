@@ -1,4 +1,4 @@
-pub const Page = *[PGSIZE]u8;
+pub const Page = [PGSIZE]u8;
 
 pub const NCPU = 4;
 pub const MAX_PROCS = 64;

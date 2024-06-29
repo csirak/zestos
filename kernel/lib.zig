@@ -4,8 +4,8 @@ const Cpu = @import("cpu.zig");
 
 comptime {
     asm (
-        \\.globl put_char
-        \\put_char:
+        \\.globl putchar_asm
+        \\putchar_asm:
         \\.equ     UART_REG_TXFIFO, 0
         \\.equ     UART_BASE, 0x10000000
         \\li       t0, UART_BASE           # load UART base address
@@ -20,8 +20,13 @@ comptime {
         \\ret
     );
 }
+extern fn putchar_asm(c: u8) void;
 
-pub extern fn put_char(c: u8) void;
+pub fn put_char(c: u8) void {
+    Cpu.current().pushInterrupt();
+    putchar_asm(c);
+    Cpu.current().popInterrupt();
+}
 
 pub fn print(s: []const u8) void {
     for (s) |c| {

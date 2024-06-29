@@ -93,7 +93,7 @@ pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, use
 
     var bytes_read: u32 = 0;
     while (bytes_read < size) {
-        const addr_index: u16 = @intCast(file_offset / fs.BLOCK_SIZE);
+        const addr_index: u16 = @intCast(@divFloor(file_offset, fs.BLOCK_SIZE));
         const block_addr = self.mapBlock(addr_index);
         const block_buffer = BufferCache.read(self.device, @intCast(block_addr));
         defer BufferCache.release(block_buffer);

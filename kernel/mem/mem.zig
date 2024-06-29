@@ -11,6 +11,11 @@ pub inline fn pageAlignDown(a: u64) u64 {
     return ((a) & ~(ps - 1));
 }
 
+pub inline fn pageOffset(a: u64) u64 {
+    const ps: u64 = riscv.PGSIZE;
+    return (a & (ps - 1));
+}
+
 // use riscv's sv39 page table scheme.
 const SATP_SV39 = (8 << 60);
 

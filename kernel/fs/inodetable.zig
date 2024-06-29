@@ -44,10 +44,10 @@ pub fn get(device: u16, inum: u16) *INode {
 
 pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode {
     var current = if (path[0] == '/') get(fs.ROOT_DEVICE, fs.ROOT_INODE) else duplicate(Process.currentOrPanic().cwd);
-    if (path[0] == '/' and path[1] == 0) {
-        current.release();
-        return current;
-    }
+    // if (path[0] == '/' and path[1] == 0) {
+    //     current.release();
+    //     return current;
+    // }
     var rest: u16 = getNextPathElem(path, name, 0);
     while (rest < fs.DIR_NAME_SIZE) {
         current.lock();
@@ -72,6 +72,9 @@ pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode
             break;
         }
         rest = getNextPathElem(path[rest..], name, rest);
+    } else {
+        current.release();
+        return current;
     }
 
     if (get_parent) {
@@ -105,7 +108,6 @@ fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
     while (path[i] == '/') : (i += 1) {}
 
     if (path[i] == 0) {
-        lib.println("ITS OVER");
         return 0xFFFF;
     }
 
