@@ -1,5 +1,5 @@
 const mem = @import("mem.zig");
-const PageTable = @import("PageTable.zig");
+const PageTable = @import("pagetable.zig");
 
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
