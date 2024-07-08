@@ -1,6 +1,5 @@
 const lib = @import("../lib.zig");
 const fs = @import("fs.zig");
-const tools = @import("../tools/blockdump.zig");
 
 const Sleeplock = @import("../locks/sleeplock.zig");
 const Process = @import("../procs/proc.zig");

@@ -225,9 +225,9 @@ pub fn yield(self: *Self) void {
     self.lock.release();
 }
 
-pub fn fork(self: *Self) !void {
+pub fn fork(self: *Self) !u64 {
     const newProc = try alloc();
-    self.pagetable.?.copy(newProc.pagetable.?, self.mem_size) catch |e| {
+    self.pagetable.?.copy(&newProc.pagetable.?, self.mem_size) catch |e| {
         newProc.free() catch unreachable;
         newProc.lock.release();
         return e;
@@ -237,7 +237,7 @@ pub fn fork(self: *Self) !void {
     newProc.trapframe.?.* = self.trapframe.?.*;
     newProc.trapframe.?.a0 = 0;
 
-    newProc.cwd = try INodeTable.duplicate(self.cwd);
+    newProc.cwd = INodeTable.duplicate(self.cwd);
 
     lib.strCopy(newProc.name[0..], self.name[0..], 20);
     const pid = newProc.pid;
@@ -317,7 +317,6 @@ pub fn userInit() !void {
     const proc = try alloc();
     defer proc.lock.release();
     init_proc = proc;
-
     // allocate code memory
     const page: *riscv.Page = @ptrCast(try KMem.allocZeroed());
     try proc.pagetable.?.mapPages(

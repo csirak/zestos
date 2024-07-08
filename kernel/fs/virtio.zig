@@ -226,7 +226,7 @@ pub fn diskInterrupt() void {
     }
 }
 
-fn read_write(buf: *Buffer, write: bool) void {
+inline fn read_write(buf: *Buffer, comptime write: bool) void {
     const sector = buf.block_num * @divExact(fs.BLOCK_SIZE, 512);
 
     lock.acquire();
@@ -287,7 +287,7 @@ fn read_write(buf: *Buffer, write: bool) void {
     freeDescriptorChain(indexes[0]);
 }
 
-fn alloc3Descriptors(indexes: *[3]u16) !void {
+inline fn alloc3Descriptors(indexes: *[3]u16) !void {
     var i: u16 = 0;
     while (i < 3) : (i += 1) {
         indexes[i] = allocDescriptor() catch {

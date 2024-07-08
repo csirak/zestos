@@ -28,7 +28,7 @@ pub fn coreInit() void {
 
 pub fn userTrap() void {
     if (riscv.r_sstatus() & riscv.SSTATUS_SPP != 0) {
-        lib.kpanic("user trap not from user mode");
+        StdOut.kpanic("user trap not from user mode");
     }
 
     riscv.w_stvec(@intFromPtr(&kernelvec));
@@ -48,26 +48,28 @@ pub fn userTrap() void {
             // 32 bit instruction size
             proc.trapframe.?.epc += 4;
             riscv.intr_on();
-            Syscalls.doSyscall();
         },
 
         .Timer => {
-            lib.println("timer");
+            StdOut.println("timer");
             proc.yield();
         },
 
         .External => {
-            lib.println("external");
+            StdOut.println("external");
         },
 
         else => {
-            lib.kpanic("Unknown interrupt");
+            StdOut.kpanic("Unknown interrupt");
             proc.setKilled();
         },
     }
+    if (reason == .Syscall) {
+        Syscalls.doSyscall();
+    }
 
     if (proc.isKilled()) {
-        lib.println("killed");
+        StdOut.println("killed");
         proc.exit(-1);
     }
 
@@ -76,6 +78,7 @@ pub fn userTrap() void {
 
 pub fn userTrapReturn() void {
     var proc = Process.currentOrPanic();
+
     // deactivate until in user mode
     riscv.intr_off();
 
@@ -102,6 +105,7 @@ pub fn userTrapReturn() void {
 }
 
 pub fn forkReturn() void {
+
     // make sure to boot fs when running
     const proc = Process.currentOrPanic();
     proc.lock.release();
@@ -120,18 +124,18 @@ export fn kerneltrap() void {
     const current = Process.current();
 
     if (sstatus & riscv.SSTATUS_SPP == 0) {
-        lib.kpanic("Not from Supervisor Mode");
+        StdOut.kpanic("Not from Supervisor Mode");
     }
 
     if (riscv.intr_get()) {
-        lib.kpanic("Interrupts on");
+        StdOut.kpanic("Interrupts on");
     }
 
     const cause = getSupervisorInterrupt();
 
     if (cause == .Unknown) {
-        lib.printAndInt("stack: ", riscv.r_sp());
-        lib.kpanic("Unknown interrupt");
+        StdOut.printAndInt("stack: ", riscv.r_sp());
+        StdOut.kpanic("Unknown interrupt");
     }
 
     if (current) |proc| {
@@ -153,9 +157,9 @@ fn getSupervisorInterrupt() Interrupt {
     }
 
     if (cause & riscv.SCAUSE_TYPE_MASK == 0) {
-        lib.println("unknown trap");
-        lib.printAndInt("cause: ", cause);
-        lib.printAndInt("sepc: ", riscv.r_sepc());
+        StdOut.println("unknown trap");
+        StdOut.printAndInt("cause: ", cause);
+        StdOut.printAndInt("sepc: ", riscv.r_sepc());
         return .Unknown;
     }
 
@@ -178,8 +182,8 @@ fn getSupervisorInterrupt() Interrupt {
             return .External;
         },
         else => {
-            lib.print("unknown fault: ");
-            lib.printInt(flag);
+            StdOut.print("unknown fault: ");
+            StdOut.printInt(flag);
             return .Unknown;
         },
     }
@@ -193,9 +197,8 @@ fn plicInterrupt() void {
             Virtio.diskInterrupt();
         },
         else => {
-            lib.println("plic interrupt");
-            lib.printInt(interrupt_id);
-            lib.kpanic("Unknown PLIC interrupt");
+            StdOut.println("plic interrupt");
+            StdOut.printInt(interrupt_id);
         },
     }
 

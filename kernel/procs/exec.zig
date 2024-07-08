@@ -1,7 +1,6 @@
 const elf = @import("../fs/elf.zig");
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
-const tools = @import("../tools/blockdump.zig");
 
 const mem = @import("../mem/mem.zig");
 

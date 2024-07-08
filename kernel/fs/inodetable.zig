@@ -1,5 +1,6 @@
 const fs = @import("fs.zig");
 const lib = @import("../lib.zig");
+const riscv = @import("../riscv.zig");
 
 const Process = @import("../procs/proc.zig");
 const BufferCache = @import("../fs/buffercache.zig");
@@ -28,6 +29,7 @@ pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
         return error.ParentDirDoesntExist;
     };
     parent.lock();
+
     if (dirLookUp(parent, @ptrCast(&name), null)) |target| {
         removeRefAndRelease(parent);
         target.lock();
@@ -123,6 +125,7 @@ pub fn get(device: u16, inum: u16) *INode {
 pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode {
     var current = if (path[0] == '/') get(fs.ROOT_DEVICE, fs.ROOT_INODE) else duplicate(Process.currentOrPanic().cwd);
     var rest: u16 = getNextPathElem(path, name, 0);
+
     while (rest < fs.DIR_NAME_SIZE) {
         current.lock();
         if (current.disk_inode.typ != fs.INODE_DIR) {
@@ -203,29 +206,33 @@ fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
     return i;
 }
 
-fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
+fn dirLookUp(dir: *INode, name: [*:0]u8, _: ?*u16) ?*INode {
     if (dir.disk_inode.typ != fs.INODE_DIR) {
         return null;
     }
-    var offset: u64 = 0;
-    var entry: fs.DirEntry = undefined;
 
-    while (offset < dir.disk_inode.size) : (offset += @sizeOf(fs.DirEntry)) {
-        _ = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
-            lib.printErr(e);
-            return null;
-        };
-        if (entry.inum == 0) {
+    var entry: [64]fs.DirEntry = undefined;
+    const ptr = @intFromPtr(&entry);
+    if (dir.disk_inode.size / @sizeOf(fs.DirEntry) > 64) {
+        lib.kpanic("Dir size is too large");
+    }
+    _ = dir.readToAddress(ptr, 0, dir.disk_inode.size, false) catch |e| {
+        lib.printErr(e);
+        return null;
+    };
+    lib.println(("\n\nREAD DIR\n\n"));
+
+    const num_entries = @divExact(dir.disk_inode.size, @sizeOf(fs.DirEntry));
+    for (0..num_entries) |i| {
+        if (entry[i].inum == 0) {
             continue;
         }
 
-        if (lib.strEq(&entry.name, name, fs.DIR_NAME_SIZE)) {
-            if (put_offset) |po| {
-                po.* = @intCast(offset);
-            }
-            return get(dir.device, entry.inum);
+        if (lib.strEq(&entry[i].name, name, fs.DIR_NAME_SIZE)) {
+            return get(dir.device, entry[i].inum);
         }
     }
+
     return null;
 }
 
