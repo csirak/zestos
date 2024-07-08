@@ -16,13 +16,14 @@ pub fn exec(path: [*:0]u8) !void {
     const proc = Process.currentOrPanic();
     const old_mem_size = proc.mem_size;
 
-    lib.println("EXEC STARTED \n\n");
     Log.beginTx();
     defer Log.endTx();
 
-    const inode = try INodeTable.namedInode(path);
-    inode.lock();
+    const inode = INodeTable.getNamedInode(path) catch {
+        lib.kpanic("Failed to get inode");
+    };
 
+    inode.lock();
     defer inode.release();
 
     var elf_header: elf.ElfHeader = undefined;

@@ -128,6 +128,12 @@ pub fn printAndInt(s: []const u8, n: u64) void {
     printInt(n);
 }
 
+pub fn printAndDec(s: []const u8, n: u64) void {
+    print(s);
+    printIntDec(n);
+    put_char('\n');
+}
+
 pub fn printPtr(ptr: anytype) void {
     printInt(@intFromPtr(ptr));
 }
@@ -146,7 +152,7 @@ pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     }
 }
 
-pub fn strCopyNullTerm(dst: []u8, src: [*:0]const u8, size: u64) void {
+pub fn strCopyNullTerm(dst: []u8, src: [*:0]u8, size: u64) void {
     for (0..size) |i| {
         dst[i] = src[i];
     }

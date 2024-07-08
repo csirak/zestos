@@ -134,6 +134,9 @@ pub fn init() void {
         PROCS[i].lock = Spinlock.init("proc");
         PROCS[i].state = .Unused;
         PROCS[i].kstackPtr = riscv.KSTACK(i);
+        for (0..fs.MAX_OPEN_FILES) |j| {
+            PROCS[i].open_files[j] = null;
+        }
     }
 }
 
@@ -204,6 +207,16 @@ pub fn setKilled(self: *Self) void {
     self.lock.release();
 }
 
+pub fn fileDescriptorAlloc(self: *Self, file: *File) !u64 {
+    for (0..fs.MAX_OPEN_FILES) |i| {
+        if (self.open_files[i] == null) {
+            self.open_files[i] = file;
+            return i;
+        }
+    }
+    return error.NoFileDescriptorAvailable;
+}
+
 pub fn yield(self: *Self) void {
     self.lock.acquire();
     self.state = .Runnable;
@@ -272,6 +285,9 @@ pub fn exit(self: *Self, status: i64) void {
     self.exit_status = status;
     self.state = .Zombie;
     proc_glob_lock.release();
+
+    self.switchToScheduler();
+    lib.kpanic("ZOMBIE WALKING");
 }
 
 pub fn initPageTable(self: *Self) !void {
@@ -299,6 +315,7 @@ pub fn getTrapFrameMappedPageTable(self: *Self) !PageTable {
 
 pub fn userInit() !void {
     const proc = try alloc();
+    defer proc.lock.release();
     init_proc = proc;
 
     // allocate code memory
@@ -313,11 +330,11 @@ pub fn userInit() !void {
 
     proc.mem_size = riscv.PGSIZE;
     proc.trapframe.?.epc = 0;
+    proc.trapframe.?.sp = riscv.PGSIZE;
     proc.state = .Runnable;
 
+    proc.cwd = try INodeTable.getNamedInode("/");
     lib.strCopy(proc.name[0..], "init", 4);
-    proc.cwd = try INodeTable.namedInode("/");
-    proc.lock.release();
 }
 
 pub fn scheduler() void {

@@ -51,7 +51,7 @@ fn writeSuperBlock() void {
     const extension_bytes_size = fs.BLOCK_SIZE - @sizeOf(fs.SuperBlock);
     const extension_bytes = [_]u8{0} ** extension_bytes_size;
     const super_block_bytes: [@sizeOf(fs.SuperBlock)]u8 = @bitCast(fs.SUPER_BLOCK);
-    writeBlock(fs.SUPER_BLOCK_INDEX, super_block_bytes ++ extension_bytes);
+    writeBlock(fs.SUPER_BLOCK_NUM, super_block_bytes ++ extension_bytes);
 }
 
 fn diskINodeAlloc(typ: u16) u16 {

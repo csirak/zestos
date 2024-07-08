@@ -313,6 +313,14 @@ pub inline fn r_tp() u64 {
     return x;
 }
 
+pub inline fn r_sp() u64 {
+    var x: u64 = 0;
+    asm volatile ("mv %[x], sp"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
 pub inline fn w_tp(x: u64) void {
     asm volatile ("mv tp, %[x]"
         :

@@ -1,18 +1,8 @@
 const Sleeplock = @import("../locks/sleeplock.zig");
-
-pub const INODE_DIR = 1;
-pub const INODE_FILE = 2;
-pub const INODE_DEVICE = 3;
-pub const INODE_SYMLINK = 4;
-
-pub const INode = struct {
-    device: u32,
-    inum: u16,
-    reference_count: u16,
-    sleeplock: Sleeplock,
-    valid: bool,
-    disk_inode: DiskINode,
-};
+const BufferCache = @import("buffercache.zig");
+const lib = @import("../lib.zig");
+const Log = @import("log.zig");
+const INode = @import("inode.zig");
 
 pub const DiskINode = extern struct {
     typ: u16,
@@ -41,7 +31,6 @@ pub const SuperBlock = extern struct {
 };
 
 pub const IndirectAddressBlock = [INDIRECT_ADDRESS_SIZE]u32;
-
 pub const Block = [BLOCK_SIZE]u8;
 
 pub const MAGIC = 0x10203040;
@@ -59,7 +48,7 @@ pub const DIRECT_ADDRESS_SIZE = 12;
 pub const INDIRECT_ADDRESS_SIZE = @divExact(BLOCK_SIZE, @sizeOf(u32));
 pub const MAX_ADDRESS_SIZE = DIRECT_ADDRESS_SIZE + INDIRECT_ADDRESS_SIZE;
 
-pub const SUPER_BLOCK_INDEX = 1;
+pub const SUPER_BLOCK_NUM = 1;
 pub const BOOT_AND_SUPER_BLOCK_OFFSET = 2;
 
 pub const INODES_PER_BLOCK = @divExact(BLOCK_SIZE, @sizeOf(DiskINode));
@@ -74,6 +63,12 @@ pub const NUM_INODES = 50; // maximum number of active i-nodes
 pub const NUM_DEVICES = 10; // maximum major device number
 pub const ROOT_DEVICE = 1; // device number of file system root disk
 
+pub const INODE_FREE = 0;
+pub const INODE_DIR = 1;
+pub const INODE_FILE = 2;
+pub const INODE_DEVICE = 3;
+pub const INODE_SYMLINK = 4;
+
 pub const SUPER_BLOCK: SuperBlock = .{
     .magic = MAGIC,
     .size = TOTAL_BLOCKS,
@@ -84,6 +79,8 @@ pub const SUPER_BLOCK: SuperBlock = .{
     .inode_start = BOOT_AND_SUPER_BLOCK_OFFSET + NUM_LOG_BLOCKS,
     .bmap_start = BOOT_AND_SUPER_BLOCK_OFFSET + NUM_LOG_BLOCKS + NUM_INODE_BLOCKS,
 };
+
+pub var loaded_super_block: SuperBlock = undefined;
 
 pub inline fn inodeBlockNum(inum: u16) u16 {
     return @intCast((@divFloor(inum, INODES_PER_BLOCK)) + SUPER_BLOCK.inode_start);
@@ -108,4 +105,18 @@ fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     for (0..len) |i| {
         dst[i] = src[i];
     }
+}
+
+pub fn init() void {
+    const sb_buffer = BufferCache.read(ROOT_DEVICE, SUPER_BLOCK_NUM);
+    defer BufferCache.release(sb_buffer);
+    const super_block: *SuperBlock = @ptrCast(@alignCast(&sb_buffer.data));
+    if (super_block.magic != MAGIC) {
+        lib.kpanic("Invalid superblock");
+    }
+    Log.init(ROOT_DEVICE, super_block) catch |e| {
+        lib.printErr(e);
+        lib.kpanic("Failed to initialize log");
+    };
+    loaded_super_block = super_block.*;
 }
