@@ -390,7 +390,7 @@ pub fn current() ?*Self {
     return cpu.proc;
 }
 
-pub fn currentOrPanic() *Self {
+pub inline fn currentOrPanic() *Self {
     const proc = current() orelse lib.kpanic("No current process");
     return proc;
 }

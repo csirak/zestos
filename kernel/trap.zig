@@ -48,6 +48,8 @@ pub fn userTrap() void {
             // 32 bit instruction size
             proc.trapframe.?.epc += 4;
             riscv.intr_on();
+            Syscalls.doSyscall();
+            lib.println("DONE TOO");
         },
 
         .Timer => {
@@ -60,12 +62,9 @@ pub fn userTrap() void {
         },
 
         else => {
-            StdOut.kpanic("Unknown interrupt");
             proc.setKilled();
+            StdOut.kpanic("Unknown interrupt");
         },
-    }
-    if (reason == .Syscall) {
-        Syscalls.doSyscall();
     }
 
     if (proc.isKilled()) {
@@ -136,9 +135,9 @@ export fn kerneltrap() void {
 
     if (reason == .Unknown) {
         lib.println("");
-        if (current) |proc| {
-            StdOut.printAndInt("kstack: ", proc.kstackPtr);
-        }
+        // if (current) |proc| {
+        // StdOut.printAndInt("kstack: ", proc.kstackPtr);
+        // }
         StdOut.printAndInt("stack: ", riscv.r_sp());
         StdOut.printAndInt("stval: ", riscv.r_stval());
         StdOut.printAndInt("sepc: ", riscv.r_sepc());
@@ -162,9 +161,6 @@ export fn kerneltrap() void {
 inline fn getSupervisorInterrupt(cause: u64) Interrupt {
     if (cause == riscv.SCAUSE_TRAP_SYSCALL) {
         return .Syscall;
-    }
-    if (cause == riscv.SCAUSE_TRAP_BREAKPOINT) {
-        return .Breakpoint;
     }
 
     if (cause & riscv.SCAUSE_TYPE_MASK == 0) {

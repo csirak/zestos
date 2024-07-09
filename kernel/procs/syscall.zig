@@ -27,48 +27,51 @@ const Static = struct {
     var makenode_path_buff: [MAX_PATH]u8 = undefined;
 };
 
-pub inline fn doSyscall() void {
+pub fn doSyscall() void {
     const proc = Process.currentOrPanic();
     const syscall_num = proc.trapframe.?.a7;
 
     lib.printAndDec("syscall_num: ", syscall_num);
-    switch (syscall_num) {
-        SYSCALL_FORK => {
-            const pid = proc.fork() catch {
-                lib.kpanic("Failed to fork");
-            };
-            proc.trapframe.?.a0 = pid;
-        },
-        SYSCALL_EXIT => {
-            exitSys(proc);
-        },
 
-        SYSCALL_EXEC => {
-            execSys(proc);
-        },
-        SYSCALL_DUP => {
-            const result = dupSys(proc);
-            proc.trapframe.?.a0 = @bitCast(result);
-        },
-        SYSCALL_WRITE => {
-            const result = writeSys(proc);
-            proc.trapframe.?.a0 = @bitCast(result);
-        },
-        SYSCALL_OPEN => {
-            const result = openSys(proc);
-            proc.trapframe.?.a0 = @bitCast(result);
-        },
-        SYSCALL_MAKE_NODE => {
-            const result = makedNodeSys(proc);
-            proc.trapframe.?.a0 = @bitCast(result);
-        },
-
-        else => {
-            lib.printAndInt("address: ", proc.trapframe.?.epc);
-            lib.printAndDec("syscall_num: ", syscall_num);
-            lib.kpanic("Unknown syscall");
-        },
+    if (syscall_num == SYSCALL_FORK) {
+        const pid = proc.fork() catch {
+            lib.kpanic("Failed to fork");
+        };
+        proc.trapframe.?.a0 = pid;
+        return;
     }
+    if (syscall_num == SYSCALL_EXIT) {
+        exitSys(proc);
+        return;
+    }
+    if (syscall_num == SYSCALL_EXEC) {
+        execSys(proc);
+
+        return;
+    }
+    if (syscall_num == SYSCALL_DUP) {
+        const result = dupSys(proc);
+        proc.trapframe.?.a0 = @bitCast(result);
+        return;
+    }
+    if (syscall_num == SYSCALL_WRITE) {
+        const result = writeSys(proc);
+        proc.trapframe.?.a0 = @bitCast(result);
+        return;
+    }
+    if (syscall_num == SYSCALL_OPEN) {
+        const result = openSys(proc);
+        proc.trapframe.?.a0 = @bitCast(result);
+        return;
+    }
+    if (syscall_num == SYSCALL_MAKE_NODE) {
+        const result = makedNodeSys(proc);
+        proc.trapframe.?.a0 = @bitCast(result);
+        return;
+    }
+    lib.printAndInt("address: ", proc.trapframe.?.epc);
+    lib.printAndDec("syscall_num: ", syscall_num);
+    lib.kpanic("Unknown syscall");
 }
 
 fn execSys(proc: *Process) void {

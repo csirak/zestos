@@ -47,28 +47,44 @@ pub fn exec(path: [*:0]u8) !void {
     };
 
     // TODO: Make sure this var is value is not copied directly
-    errdefer pagetable.userFree(user_space_size) catch |e| {
-        lib.println("Error freeing user space: ");
-        lib.printErr(e);
-    };
 
     while (cur_program_header < elf_header.program_header_count) : (cur_program_header += 1) {
         var program_header: elf.ProgramHeader = undefined;
         const cur_program_header_file_offset = elf_header.program_header_offset + cur_program_header * @sizeOf(elf.ProgramHeader);
         const ph_read_size = try inode.readToAddress(@intFromPtr(&program_header), cur_program_header_file_offset, @sizeOf(elf.ProgramHeader), false);
         if (ph_read_size != @sizeOf(elf.ProgramHeader)) {
+            pagetable.userFree(user_space_size) catch |e| {
+                lib.println("Error freeing user space InvalidElfProgramHeader: ");
+                lib.printErr(e);
+                return e;
+            };
             return error.InvalidElfProgramHeader;
         }
         if (program_header.typ != .LOAD) {
             continue;
         }
         if (program_header.memory_size < program_header.file_size) {
+            pagetable.userFree(user_space_size) catch |e| {
+                lib.println("Error freeing user space InvalidElfProgramHeaderMemoryToSmall: ");
+                lib.printErr(e);
+                return e;
+            };
             return error.InvalidElfProgramHeaderMemoryToSmall;
         }
         if (program_header.memory_size + program_header.virtual_addr < program_header.virtual_addr) {
+            pagetable.userFree(user_space_size) catch |e| {
+                lib.println("Error freeing user space ProgramHeaderVirtualAddressOverflow: ");
+                lib.printErr(e);
+                return e;
+            };
             return error.ProgramHeaderVirtualAddressOverflow;
         }
         if (program_header.virtual_addr % riscv.PGSIZE != 0) {
+            pagetable.userFree(user_space_size) catch |e| {
+                lib.println("Error freeing user space ProgramHeaderVirtualAddressNotAligned: ");
+                lib.printErr(e);
+                return e;
+            };
             return error.ProgramHeaderVirtualAddressNotAligned;
         }
 
@@ -86,11 +102,11 @@ pub fn exec(path: [*:0]u8) !void {
     const page_aligned_size = mem.pageAlignUp(user_space_size);
     const stack_top = page_aligned_size + 2 * riscv.PGSIZE;
     _ = try pagetable.userAlloc(page_aligned_size, stack_top, mem.PTE_W);
+
     // add guard page before top
     try pagetable.revokeUserPage(page_aligned_size);
 
     // const stack_base = stack_top - riscv.PGSIZE;
-
     var last_back_slash: u16 = 0;
     var i: u16 = 0;
     while (path[i] != 0) : (i += 1) {
@@ -98,6 +114,7 @@ pub fn exec(path: [*:0]u8) !void {
             last_back_slash = i;
         }
     }
+
     lib.strCopyNullTerm(&proc.name, path[last_back_slash + 1 ..], Process.NAME_SIZE);
 
     var old_pagetable = proc.pagetable.?;
@@ -110,7 +127,6 @@ pub fn exec(path: [*:0]u8) !void {
         lib.println("Error freeing old user space: ");
         lib.printErr(e);
     };
-
     // TODO: set up stack
 }
 
