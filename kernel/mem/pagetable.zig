@@ -63,20 +63,13 @@ pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: 
     if ((last_page - virtual_address_page_aligned) % riscv.PGSIZE != 0) {
         lib.kpanic("not page align");
     }
-
     while (virtual_address_page_aligned + page_offset <= last_page) : (page_offset += riscv.PGSIZE) {
-        // if (virtual_address > riscv.KSTACK(riscv.MAX_PROCS)) {
-        //     lib.printAndInt("MAPPING KSTACKS: ", virtual_address_page_aligned + page_offset);
-        // }
         const pte = try self.getPageTableEntry(virtual_address_page_aligned + page_offset, true);
         if (pte.* & mem.PTE_V != 0) {
             return error.MappedPageAlreadyAllocated;
         }
         pte.* = physAddrToPTE(@ptrFromInt(physical_address + page_offset)) | flags | mem.PTE_V;
     }
-    // if (virtual_address > riscv.KSTACK(riscv.MAX_PROCS)) {
-    //     lib.println("\nDONE MAPPING KSTACKS\n\n");
-    // }
 }
 
 pub fn unMapPages(self: *Self, virtual_address: u64, num_pages: u64, freePages: bool) !void {

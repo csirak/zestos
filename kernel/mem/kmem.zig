@@ -84,13 +84,14 @@ fn mapKernelPages() !void {
     try pagetable.mapPages(kernel_code_end_addr, kernel_code_end_addr, riscv.PHYSTOP - kernel_code_end_addr, mem.PTE_R | mem.PTE_W);
     try pagetable.mapPages(riscv.TRAMPOLINE, trampoline_addr, riscv.PGSIZE, mem.PTE_R | mem.PTE_X);
 
+    // lib.printAndInt("START: ", riscv.TRAMPOLINE);
     for (0..riscv.MAX_PROCS) |i| {
         const page = try alloc();
-        const virtual_address = riscv.KSTACK(i);
-        // lib.printAndInt("FROM: ", mem.pageAlignDown(virtual_address + riscv.PGSIZE - 1));
-        // lib.printAndInt("TO  : ", mem.pageAlignDown(virtual_address));
+        const virtual_address = riscv.KSTACK(i) - 1;
+        // lib.printAndInt("FROM : ", mem.pageAlignDown(virtual_address + riscv.PGSIZE) - 1);
+        // lib.printAndInt("TO   : ", mem.pageAlignDown(virtual_address));
         // lib.println("");
-        try pagetable.mapPages(virtual_address, @intFromPtr(page), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+        try pagetable.mapPages(virtual_address, @intFromPtr(page), riscv.KSTACK_SIZE, mem.PTE_R | mem.PTE_W);
     }
 }
 

@@ -35,6 +35,12 @@ pub fn printAndInt(s: []const u8, n: u64) void {
     lock.release();
 }
 
+pub fn printAndDec(s: []const u8, n: u64) void {
+    lock.acquire();
+    lib.printAndDec(s, n);
+    lock.release();
+}
+
 pub fn coreLog(comptime s: []const u8) void {
     lock.acquire();
     lib.coreLog(s);

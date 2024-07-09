@@ -8,7 +8,7 @@ const Process = @import("procs/proc.zig");
 const Syscalls = @import("procs/syscall.zig");
 const Virtio = @import("fs/virtio.zig");
 
-const Interrupt = enum { Timer, Software, External, Syscall, Unknown };
+const Interrupt = enum { Timer, Software, External, Syscall, Breakpoint, Unknown };
 
 var ticks: u64 = 0;
 var tickslock: Spinlock = undefined;
@@ -36,8 +36,8 @@ pub fn userTrap() void {
     const proc = Process.currentOrPanic();
 
     proc.trapframe.?.epc = riscv.r_sepc();
-
-    const reason = getSupervisorInterrupt();
+    const scause = riscv.r_scause();
+    const reason = getSupervisorInterrupt(scause);
 
     switch (reason) {
         .Syscall => {
@@ -86,7 +86,7 @@ pub fn userTrapReturn() void {
     riscv.w_stvec(user_vec_trampoline);
 
     proc.trapframe.?.kernel_satp = riscv.r_satp();
-    proc.trapframe.?.kernel_sp = proc.kstackPtr + riscv.PGSIZE;
+    proc.trapframe.?.kernel_sp = proc.kstackPtr;
     proc.trapframe.?.kernel_trap = @intFromPtr(&userTrap);
     proc.trapframe.?.kernel_hartid = riscv.r_tp();
 
@@ -119,7 +119,8 @@ pub fn forkReturn() void {
 
 export fn kerneltrap() void {
     const sepc = riscv.r_sepc();
-    // const scause = riscv.r_scause();
+    const scause = riscv.r_scause();
+
     const sstatus = riscv.r_sstatus();
     const current = Process.current();
 
@@ -131,15 +132,24 @@ export fn kerneltrap() void {
         StdOut.kpanic("Interrupts on");
     }
 
-    const cause = getSupervisorInterrupt();
+    const reason = getSupervisorInterrupt(scause);
 
-    if (cause == .Unknown) {
+    if (reason == .Unknown) {
+        lib.println("");
+        if (current) |proc| {
+            StdOut.printAndInt("kstack: ", proc.kstackPtr);
+        }
         StdOut.printAndInt("stack: ", riscv.r_sp());
+        StdOut.printAndInt("stval: ", riscv.r_stval());
+        StdOut.printAndInt("sepc: ", riscv.r_sepc());
+        StdOut.printAndInt("ra: ", riscv.r_ra());
+        StdOut.printAndInt("a0: ", riscv.r_a0());
+        StdOut.printAndDec("cause: ", scause);
         StdOut.kpanic("Unknown interrupt");
     }
 
     if (current) |proc| {
-        if (proc.state == .Running and cause == .Timer) {
+        if (proc.state == .Running and reason == .Timer) {
             proc.yield();
         }
     }
@@ -149,17 +159,15 @@ export fn kerneltrap() void {
 }
 
 // must be called in kernel mode with stvec set to kernelvec
-fn getSupervisorInterrupt() Interrupt {
-    const cause = riscv.r_scause();
-
+inline fn getSupervisorInterrupt(cause: u64) Interrupt {
     if (cause == riscv.SCAUSE_TRAP_SYSCALL) {
         return .Syscall;
     }
+    if (cause == riscv.SCAUSE_TRAP_BREAKPOINT) {
+        return .Breakpoint;
+    }
 
     if (cause & riscv.SCAUSE_TYPE_MASK == 0) {
-        StdOut.println("unknown trap");
-        StdOut.printAndInt("cause: ", cause);
-        StdOut.printAndInt("sepc: ", riscv.r_sepc());
         return .Unknown;
     }
 

@@ -13,6 +13,7 @@ const BufferCache = @import("fs/buffercache.zig");
 const Virtio = @import("fs/virtio.zig");
 const FileTable = @import("fs/filetable.zig");
 const INodeTable = @import("fs/inodetable.zig");
+const root = @import("root");
 
 var started: bool = false;
 

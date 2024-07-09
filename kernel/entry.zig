@@ -1,4 +1,6 @@
 const riscv = @import("riscv.zig");
+const std = @import("std");
+const lib = @import("lib.zig");
 
 export var stack0 = [_]u8{0} ** (riscv.PGSIZE * riscv.NCPU);
 

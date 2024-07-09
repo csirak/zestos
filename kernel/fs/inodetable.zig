@@ -160,12 +160,15 @@ pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode
         current.release();
         return error.NotFound;
     }
+
     return current;
 }
 
 pub fn getNamedInode(path: [*:0]const u8) !*INode {
-    var name: [fs.DIR_NAME_SIZE:0]u8 = undefined;
-    return try getWithPath(path, false, &name);
+    const Static = struct {
+        var name: [fs.DIR_NAME_SIZE:0]u8 = undefined;
+    };
+    return try getWithPath(path, false, &Static.name);
 }
 
 pub fn duplicate(inode: *INode) *INode {
@@ -220,7 +223,6 @@ fn dirLookUp(dir: *INode, name: [*:0]u8, _: ?*u16) ?*INode {
         lib.printErr(e);
         return null;
     };
-    lib.println(("\n\nREAD DIR\n\n"));
 
     const num_entries = @divExact(dir.disk_inode.size, @sizeOf(fs.DirEntry));
     for (0..num_entries) |i| {

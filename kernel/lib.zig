@@ -98,28 +98,26 @@ pub fn printIntDec(n: u64) void {
 
 pub fn printIntHex(n: u64) void {
     // 0 x (8 chars) \0
-    var out = [_]u8{'0'} ** 11;
-    out[0] = '0';
+    var out = [_:0]u8{'0'} ** 18;
     out[1] = 'x';
-    out[10] = 0;
 
     var cur = n;
-    var i: u8 = 1;
+    var i: u8 = 0;
     while (cur > 0) {
         const num: u8 = @intCast(cur & 0xF);
-        out[10 - i] = intToAsciiHex(num);
+        out[17 - i] = intToAsciiHex(num);
         cur = cur >> 4;
         i += 1;
     }
 
-    print(out[0..11]);
+    printNullTerm(&out);
 }
 
 pub fn intToAsciiHex(n: u8) u8 {
     if (n < 10) {
-        return n + 48;
+        return n + '0';
     } else {
-        return n + 87;
+        return n + 'a' - 10;
     }
 }
 
@@ -141,6 +139,15 @@ pub fn printPtr(ptr: anytype) void {
 pub fn kpanic(msg: []const u8) noreturn {
     print("kernel panic: ");
     println(msg);
+    while (true) {}
+    unreachable;
+}
+
+pub fn kpanicInt(msg: []const u8, n: u64) noreturn {
+    print("kernel panic: ");
+    print(msg);
+    print(": ");
+    printInt(n);
     while (true) {}
     unreachable;
 }

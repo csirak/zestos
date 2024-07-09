@@ -4,6 +4,8 @@ pub const NCPU = 4;
 pub const MAX_PROCS = 64;
 pub const PGSIZE = 4096; // bytes per page
 
+pub const KSTACK_SIZE = PGSIZE;
+
 pub const UART0: u64 = 0x10000000;
 pub const UART0_IRQ: u64 = 10;
 
@@ -15,7 +17,7 @@ pub const PLIC: u64 = 0x0c000000;
 pub const KERNBASE: u64 = 0x80000000;
 
 pub const PLIC_SIZE = 0x400000;
-pub const TIMER_INTERVAL = 1000000;
+pub const TIMER_INTERVAL = 100000000;
 pub const CLINT_MTIME: *u64 = @ptrFromInt(CLINT + 0xBFF8);
 
 pub inline fn CLINT_MTIMECMP(hartid: u64) *u64 {
@@ -33,7 +35,7 @@ pub const TRAPFRAME: u64 = (TRAMPOLINE - PGSIZE);
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
 pub inline fn KSTACK(p: u64) u64 {
-    return TRAMPOLINE - ((p) + 1) * 2 * PGSIZE;
+    return TRAPFRAME - ((p) + 1) * (KSTACK_SIZE + PGSIZE) - PGSIZE;
 }
 
 // Machine Status Register, mstatus
@@ -64,6 +66,7 @@ pub const SCAUSE_TYPE_MASK: u64 = 1 << 63; // Interrupt
 pub const SCAUSE_FLAG_MASK: u64 = 0xFF; // Status
 
 pub const SCAUSE_INT_SOFTWARE: u64 = 1;
+pub const SCAUSE_TRAP_BREAKPOINT: u64 = 3;
 pub const SCAUSE_TRAP_SYSCALL: u64 = 8;
 pub const SCAUSE_INT_PLIC: u64 = 9;
 
@@ -316,6 +319,22 @@ pub inline fn r_tp() u64 {
 pub inline fn r_sp() u64 {
     var x: u64 = 0;
     asm volatile ("mv %[x], sp"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
+pub inline fn r_ra() u64 {
+    var x: u64 = 0;
+    asm volatile ("mv %[x], ra"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
+pub inline fn r_a0() u64 {
+    var x: u64 = 0;
+    asm volatile ("mv %[x], a0"
         : [x] "=r" (x),
     );
     return x;

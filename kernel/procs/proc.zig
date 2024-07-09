@@ -26,7 +26,7 @@ extern fn trampoline() void;
 
 extern fn switch_context(old_context: *SysCallContext, new_context: *SysCallContext) void;
 
-const TrapFrame = extern struct {
+pub const TrapFrame = extern struct {
     kernel_satp: u64, // kernel page table
     kernel_sp: u64, // top of process's kernel stack
     kernel_trap: u64, // usertrap()
@@ -125,7 +125,6 @@ open_files: [fs.MAX_OPEN_FILES]?*File,
 trapframe: ?*TrapFrame,
 call_context: SysCallContext,
 name: [NAME_SIZE]u8,
-
 pub fn init() void {
     proc_glob_lock = Spinlock.init("proc_glob_lock");
     pid_lock = Spinlock.init("pid_lock");
@@ -133,7 +132,7 @@ pub fn init() void {
     for (0..riscv.MAX_PROCS) |i| {
         PROCS[i].lock = Spinlock.init("proc");
         PROCS[i].state = .Unused;
-        PROCS[i].kstackPtr = riscv.KSTACK(i);
+        PROCS[i].kstackPtr = riscv.KSTACK(i) - 1;
         for (0..fs.MAX_OPEN_FILES) |j| {
             PROCS[i].open_files[j] = null;
         }
@@ -168,7 +167,8 @@ pub fn alloc() !*Self {
 
     proc.call_context = std.mem.zeroes(SysCallContext);
     proc.call_context.ra = @intFromPtr(&Trap.forkReturn);
-    proc.call_context.sp = proc.kstackPtr + riscv.PGSIZE;
+    proc.call_context.sp = proc.kstackPtr;
+
     return proc;
 }
 
@@ -235,6 +235,12 @@ pub fn fork(self: *Self) !u64 {
 
     newProc.mem_size = self.mem_size;
     newProc.trapframe.?.* = self.trapframe.?.*;
+
+    if (newProc.trapframe) |tf| {
+        lib.print("FORKED TRAPFRAME: ");
+        lib.printInt(@intFromPtr(self.trapframe));
+        lib.printPtr(tf);
+    }
     newProc.trapframe.?.a0 = 0;
 
     newProc.cwd = INodeTable.duplicate(self.cwd);
@@ -304,12 +310,17 @@ pub fn getTrapFrameMappedPageTable(self: *Self) !PageTable {
         mem.PTE_R | mem.PTE_X,
     );
 
+    if (self.trapframe == null) {
+        lib.kpanic("trapframe is null");
+    }
+
     try new_pagetable.mapPages(
         riscv.TRAPFRAME,
         @intFromPtr(self.trapframe.?),
         riscv.PGSIZE,
         mem.PTE_R | mem.PTE_W,
     );
+
     return new_pagetable;
 }
 
