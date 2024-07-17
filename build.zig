@@ -61,7 +61,7 @@ pub fn build(b: *std.Build) void {
     const run_cmd_str = [_][]const u8{
         "qemu-system-riscv64",
         "-m",
-        "512",
+        "128",
         "-smp",
         // "4",
         "1",

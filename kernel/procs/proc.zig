@@ -132,7 +132,7 @@ pub fn init() void {
     for (0..riscv.MAX_PROCS) |i| {
         PROCS[i].lock = Spinlock.init("proc");
         PROCS[i].state = .Unused;
-        PROCS[i].kstackPtr = riscv.KSTACK(i) - 1;
+        PROCS[i].kstackPtr = riscv.KSTACK(i);
         for (0..fs.MAX_OPEN_FILES) |j| {
             PROCS[i].open_files[j] = null;
         }

@@ -87,7 +87,7 @@ fn mapKernelPages() !void {
     // lib.printAndInt("START: ", riscv.TRAMPOLINE);
     for (0..riscv.MAX_PROCS) |i| {
         const page = try alloc();
-        const virtual_address = riscv.KSTACK(i) - 1;
+        const virtual_address = riscv.KSTACK(i);
         // lib.printAndInt("FROM : ", mem.pageAlignDown(virtual_address + riscv.PGSIZE) - 1);
         // lib.printAndInt("TO   : ", mem.pageAlignDown(virtual_address));
         // lib.println("");
