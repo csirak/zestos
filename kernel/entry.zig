@@ -9,8 +9,8 @@ comptime {
         \\# kernel.ld causes the following code to
         \\# be placed at 0x80000000.
         \\.section .text.entry
-        \\.global  _entry
-        \\_entry:
+        \\.global  _start
+        \\_start:
         \\# set up a stack for C.
         \\# stack0 is declared in start.c,
         \\# with a 4096-byte stack per CPU.

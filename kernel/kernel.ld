@@ -1,5 +1,5 @@
 OUTPUT_ARCH( "riscv" )
-ENTRY( _entry )
+ENTRY( _start )
 
 SECTIONS
 {
@@ -40,6 +40,6 @@ SECTIONS
     . = ALIGN(16);
     *(.bss .bss.*)
   }
-
+  . = ALIGN(0x1000);
   PROVIDE(end = .);
 }
