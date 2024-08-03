@@ -1,8 +1,18 @@
-pub const FileType = enum(u16) { Pipe, INode, Device };
+const Sleeplock = @import("../locks/sleeplock.zig");
+
 pub const INodeType = enum(u16) { Directory = 1, File, Device, Symlink };
 
+pub const INode = struct {
+    device: u32,
+    inum: u16,
+    reference_count: u16,
+    sleep_lock: Sleeplock,
+    valid: bool,
+    disk_inode: DiskINode,
+};
+
 pub const DiskINode = extern struct {
-    type: INodeType,
+    typ: INodeType,
     major: u16 = 0,
     minor: u16 = 0,
     num_links: u16 = 1,
@@ -26,6 +36,8 @@ pub const SuperBlock = extern struct {
     bmap_start: u32,
 };
 
+pub const IndirectAddressBlock = [INDIRECT_ADDRESS_SIZE]u32;
+
 pub const Block = [BLOCK_SIZE]u8;
 
 pub const MAGIC = 0x10203040;
@@ -37,6 +49,7 @@ pub const DIR_NAME_SIZE = 14;
 pub const BITS_PER_BLOCK = 8 * BLOCK_SIZE;
 pub const MAX_BLOCKS_PER_OP = 10;
 pub const NUM_LOG_BLOCKS = 3 * MAX_BLOCKS_PER_OP;
+pub const BUFFER_CACHE_SIZE = 3 * MAX_BLOCKS_PER_OP;
 
 pub const DIRECT_ADDRESS_SIZE = 12;
 pub const INDIRECT_ADDRESS_SIZE = BLOCK_SIZE / @sizeOf(u32);
@@ -51,6 +64,12 @@ pub const NUM_INODE_BLOCKS = (INODES_NUM / INODES_PER_BLOCK) + 1;
 pub const NUM_META_BLOCKS = 2 + NUM_LOG_BLOCKS + NUM_INODE_BLOCKS + NUM_BITMAP_BLOCKS;
 pub const NUM_DATA_BLOCKS = TOTAL_BLOCKS - NUM_META_BLOCKS;
 
+pub const NUM_FILES = 100; // open files per system
+pub const MAX_OPEN_FILES = 16; // open files per process
+pub const NUM_INODES = 50; // maximum number of active i-nodes
+pub const NUM_DEVICES = 10; // maximum major device number
+pub const ROOT_DEVICE = 1; // device number of file system root disk
+
 pub const SUPER_BLOCK: SuperBlock = .{
     .magic = MAGIC,
     .size = TOTAL_BLOCKS,
@@ -62,8 +81,12 @@ pub const SUPER_BLOCK: SuperBlock = .{
     .bmap_start = BOOT_AND_SUPER_BLOCK_OFFSET + NUM_LOG_BLOCKS + NUM_INODE_BLOCKS,
 };
 
-pub inline fn inodeBlockNum(inum: u16) u64 {
+pub inline fn inodeBlockNum(inum: u16) u16 {
     return @intCast((inum) / INODES_PER_BLOCK + SUPER_BLOCK.inode_start);
+}
+
+pub inline fn bitMapBlockNum(block_num: u16) u16 {
+    return @intCast((block_num) / BITS_PER_BLOCK + SUPER_BLOCK.bmap_start);
 }
 
 pub inline fn dirEntry(inum: u16, name: []const u8) DirEntry {

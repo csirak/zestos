@@ -111,6 +111,38 @@ pub fn copy(self: *Self, dest: *Self, size: u64) !void {
     }
 }
 
+pub fn copyInto(self: *Self, dest: u64, src: *[]u8, size: u64) !void {
+    lib.kpanic("not Implemented copyInto");
+
+    _ = self;
+    _ = dest;
+    _ = src;
+    _ = size;
+    // var bytes_left = size;
+    // var cur_dest_addr = dest;
+    // while (bytes_left > 0) {
+    //     const virtual_address = mem.pageAlignDown(cur_dest_addr);
+    //     const kernel_mem_addr = self.getPhysAddrFromVa(virtual_address);
+    // }
+}
+
+pub fn getUserPhysAddrFromVa(self: *Self, virtual_address: u64) !*u64 {
+    if (virtual_address > riscv.MAXVA) {
+        return error.VirtualAddressOutOfBounds;
+    }
+    const pte = try self.getPhysAddrFromVa(virtual_address, false);
+    if (pte.* == 0) {
+        return error.PageNotMapped;
+    }
+    if (pte.* & mem.PTE_V == 0) {
+        return error.PageTableEntryNotValid;
+    }
+    if (pte.* & mem.PTE_U == 0) {
+        return error.PageTableEntryNotUser;
+    }
+    return pageTableEntryToPhysAddr(pte.*);
+}
+
 pub inline fn setSatp(self: *Self) void {
     riscv.w_satp(self.getAsSatp());
 }

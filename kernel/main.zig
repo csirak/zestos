@@ -6,6 +6,11 @@ const KMem = @import("mem/kmem.zig");
 const Plic = @import("io/plic.zig");
 const StdOut = @import("io/stdout.zig");
 
+const BufferCache = @import("fs/buffercache.zig");
+const Virtio = @import("fs/virtio.zig");
+const FileTable = @import("fs/filetable.zig");
+const INodeTable = @import("fs/inodetable.zig");
+
 var started: bool = false;
 
 pub export fn main() void {
@@ -23,6 +28,11 @@ pub export fn main() void {
 
         Plic.init();
         Plic.coreInit();
+
+        BufferCache.init();
+        FileTable.init();
+        INodeTable.init();
+        Virtio.init();
 
         Process.userInit() catch |e| {
             lib.println("error initializing user process");
