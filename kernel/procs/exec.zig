@@ -67,11 +67,10 @@ pub fn exec(path: [*:0]u8) !void {
         try loadSegment(&pagetable, program_header.virtual_addr, inode, program_header.offset, program_header.file_size);
     }
 
-    proc.mem_size = user_space_size;
     // TODO: check page alignment
     const page_aligned_size = mem.pageAlignUp(user_space_size);
     const stack_top = page_aligned_size + 2 * riscv.PGSIZE;
-    _ = try pagetable.userAlloc(page_aligned_size, stack_top, mem.PTE_W);
+    proc.mem_size = try pagetable.userAlloc(user_space_size, stack_top, mem.PTE_W);
 
     // add guard page before top
     try pagetable.revokeUserPage(page_aligned_size);

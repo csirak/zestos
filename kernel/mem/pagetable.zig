@@ -102,7 +102,7 @@ pub fn copy(self: *Self, dest: *Self, size: u64) !void {
     var i: u64 = 0;
     while (i < size) : (i += riscv.PGSIZE) {
         const pte = try self.getPageTableEntry(i, false);
-        if (pte.* & mem.PTE_V != 0) {
+        if (pte.* & mem.PTE_V == 0) {
             lib.kpanic("page table entry is not valid\n");
         }
 
@@ -120,7 +120,7 @@ pub fn userAlloc(self: *Self, old_size: u64, new_size: u64, flags: u16) !u64 {
         return new_size;
     }
 
-    var aligned_cur_virtual_address = mem.pageAlignDown(old_size);
+    var aligned_cur_virtual_address = mem.pageAlignUp(old_size);
 
     while (aligned_cur_virtual_address < new_size) : (aligned_cur_virtual_address += riscv.PGSIZE) {
         const page = KMem.allocZeroed() catch |e| {
@@ -139,7 +139,8 @@ pub fn userAlloc(self: *Self, old_size: u64, new_size: u64, flags: u16) !u64 {
 
 pub fn revokeUserPage(self: *Self, virtual_address: u64) !void {
     const pte = try self.getPageTableEntry(virtual_address, false);
-    pte.* &= ~(mem.PTE_U);
+    const mask = ~(@as(u64, mem.PTE_U));
+    pte.* &= mask;
 }
 
 pub fn userDeAlloc(self: *Self, old_size: u64, new_size: u64) !u64 {
