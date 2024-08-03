@@ -1,9 +1,13 @@
-const TRAPFRAMEl: u64 = 0x6696969;
+const riscv = @import("riscv.zig");
+
+const tu = riscv.TRAPFRAME >> 32;
+const tl = riscv.TRAPFRAME & 0xFFFFFFFF;
+
 comptime {
     asm (
         \\        .section   trampsec
         \\        .globl     trampoline
-        \\        .equ       TRAPFRAME, 0x10000000000000
+        \\.equ TRAPFRAME, 0x3fffffe000
         \\trampoline:
         \\        .align     4
         \\        .globl     uservec
@@ -23,6 +27,8 @@ comptime {
         \\# each process has a separate p->trapframe memory area,
         \\# but it's mapped to the same virtual address
         \\# (TRAPFRAME) in every process's user page table.
+        \\
+        \\# LOAD TRAPFRAME
         \\        li         a0, TRAPFRAME
         \\
         \\# save the user registers in TRAPFRAME
@@ -99,6 +105,8 @@ comptime {
         \\        csrw       satp, a0
         \\        sfence.vma zero, zero
         \\
+        \\
+        \\# LOAD TRAPFRAME
         \\        li         a0, TRAPFRAME
         \\
         \\# restore all but a0 from TRAPFRAME

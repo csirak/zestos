@@ -1,2 +1,4 @@
 *.dump
+/.zig-*
 /zig-*
+*.img

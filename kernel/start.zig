@@ -1,5 +1,8 @@
-extern fn main() void;
+const main = @import("main.zig").main;
 const riscv = @import("riscv.zig");
+const std = @import("std");
+
+export var timer_scratch align(16) = [_]u64{0} ** (riscv.NCPU * 5);
 
 export fn start() noreturn {
     const mstatus = riscv.r_mstatus();
@@ -17,8 +20,21 @@ export fn start() noreturn {
     riscv.w_pmpaddr0(0x3fffffffffffff);
     riscv.w_pmpcfg0(0xf);
 
-    riscv.w_tp(riscv.r_tp());
+    timerinit();
+
+    riscv.w_tp(riscv.r_mhartid());
 
     riscv.mret();
     unreachable;
+}
+
+inline fn timerinit() void {
+    const tid = riscv.r_mhartid();
+    const clint_mtimecmp: *u64 = riscv.CLINT_MTIMECMP(tid);
+    clint_mtimecmp.* = riscv.CLINT_MTIME.* + riscv.TIMER_INTERVAL;
+
+    const scratchOffset = tid * 5;
+    timer_scratch[scratchOffset + 3] = @intFromPtr(clint_mtimecmp);
+    timer_scratch[scratchOffset + 4] = riscv.TIMER_INTERVAL;
+    riscv.w_mscratch(@intFromPtr(&timer_scratch[scratchOffset]));
 }
