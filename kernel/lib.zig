@@ -2,10 +2,14 @@ const std = @import("std");
 const riscv = @import("riscv.zig");
 const Cpu = @import("cpu.zig");
 
+var print_buffer = [_]u8{0} ** 4096;
+var print_fba = std.heap.FixedBufferAllocator.init(&print_buffer);
+const print_allocator = print_fba.allocator();
+
 comptime {
     asm (
-        \\.globl put_char
-        \\put_char:
+        \\.globl putchar_asm
+        \\putchar_asm:
         \\.equ     UART_REG_TXFIFO, 0
         \\.equ     UART_BASE, 0x10000000
         \\li       t0, UART_BASE           # load UART base address
@@ -20,8 +24,13 @@ comptime {
         \\ret
     );
 }
+extern fn putchar_asm(c: u8) void;
 
-pub extern fn put_char(c: u8) void;
+pub fn put_char(c: u8) void {
+    Cpu.current().pushInterrupt();
+    putchar_asm(c);
+    Cpu.current().popInterrupt();
+}
 
 pub fn print(s: []const u8) void {
     for (s) |c| {
@@ -93,34 +102,38 @@ pub fn printIntDec(n: u64) void {
 
 pub fn printIntHex(n: u64) void {
     // 0 x (8 chars) \0
-    var out = [_]u8{'0'} ** 11;
-    out[0] = '0';
+    var out = [_:0]u8{'0'} ** 18;
     out[1] = 'x';
-    out[10] = 0;
 
     var cur = n;
-    var i: u8 = 1;
+    var i: u8 = 0;
     while (cur > 0) {
         const num: u8 = @intCast(cur & 0xF);
-        out[10 - i] = intToAsciiHex(num);
+        out[17 - i] = intToAsciiHex(num);
         cur = cur >> 4;
         i += 1;
     }
 
-    print(out[0..11]);
+    printNullTerm(&out);
 }
 
 pub fn intToAsciiHex(n: u8) u8 {
     if (n < 10) {
-        return n + 48;
+        return n + '0';
     } else {
-        return n + 87;
+        return n + 'a' - 10;
     }
 }
 
-pub fn printAndInt(s: []const u8, n: u64) void {
+pub inline fn printAndInt(s: []const u8, n: u64) void {
     print(s);
     printInt(n);
+}
+
+pub fn printAndDec(s: []const u8, n: u64) void {
+    print(s);
+    printIntDec(n);
+    put_char('\n');
 }
 
 pub fn printPtr(ptr: anytype) void {
@@ -134,6 +147,15 @@ pub fn kpanic(msg: []const u8) noreturn {
     unreachable;
 }
 
+pub fn kpanicInt(msg: []const u8, n: u64) noreturn {
+    print("kernel panic: ");
+    print(msg);
+    print(": ");
+    printInt(n);
+    while (true) {}
+    unreachable;
+}
+
 pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     const len = @min(src.len, size);
     for (0..len) |i| {
@@ -141,7 +163,7 @@ pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     }
 }
 
-pub fn strCopyNullTerm(dst: []u8, src: [*:0]const u8, size: u64) void {
+pub fn strCopyNullTerm(dst: []u8, src: [*:0]u8, size: u64) void {
     for (0..size) |i| {
         dst[i] = src[i];
     }
@@ -170,4 +192,9 @@ pub fn printCpuInfo() void {
     print("cpu depth: ");
     printByte(@intCast(Cpu.current().disabled_depth));
     println("");
+}
+
+pub fn printf(comptime fmt: []const u8, args: anytype) void {
+    const out = std.fmt.allocPrint(print_allocator, fmt, args) catch unreachable;
+    print(out);
 }
