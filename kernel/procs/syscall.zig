@@ -12,12 +12,12 @@ const exec = @import("exec.zig").exec;
 
 pub const SYSCALL_FORK = 1;
 pub const SYSCALL_EXIT = 2;
+pub const SYSCALL_WAIT = 3;
 pub const SYSCALL_EXEC = 7;
 pub const SYSCALL_DUP = 10;
 pub const SYSCALL_OPEN = 15;
 pub const SYSCALL_WRITE = 16;
 pub const SYSCALL_MAKE_NODE = 17;
-pub const SYSCALL_PUT_CHAR = 64;
 
 const MAX_PATH = 128;
 
@@ -36,12 +36,9 @@ pub fn doSyscall() void {
             lib.kpanic("Failed to fork");
         },
         SYSCALL_EXIT => proc.exit(@intCast(proc.trapframe.?.a0)),
-        return;
-    }
-    if (syscall_num == SYSCALL_EXIT) {
-        exitSys(proc);
-        return;
-    },
+        SYSCALL_WAIT => {
+            proc.trapframe.?.a0 = @bitCast(waitSys(proc));
+        },
         SYSCALL_EXEC => execSys(proc),
         SYSCALL_DUP => {
             proc.trapframe.?.a0 = @bitCast(dupSys(proc));

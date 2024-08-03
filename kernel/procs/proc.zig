@@ -256,9 +256,33 @@ pub fn fork(self: *Self) !u64 {
     return pid;
 }
 
-// atomically lock process and release external lock
-// process will be scheduled to run again when awakened
-// reacquire lock
+pub fn wait(self: *Self, _: u64) !u64 {
+    proc_glob_lock.acquire();
+    defer proc_glob_lock.release();
+    var has_children = false;
+
+    while (true) {
+        for (&PROCS) |*proc| {
+            proc.lock.acquire();
+            defer proc.lock.release();
+            if (proc.parent != self) {
+                continue;
+            }
+            has_children = true;
+            if (proc.state == .Zombie) {
+                const pid = proc.pid;
+                try proc.free();
+                return pid;
+            }
+        }
+        // check if killed
+        if (!has_children or self.isKilled()) {
+            return error.NoChildren;
+        }
+
+        self.sleep(self, &proc_glob_lock);
+    }
+}
 
 /// atomically lock process and release external lockprocess will be scheduled to run again when awakened
 /// reacquire lock
