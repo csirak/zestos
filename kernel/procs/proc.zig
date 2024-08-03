@@ -26,7 +26,7 @@ extern fn trampoline() void;
 
 extern fn switch_context(old_context: *SysCallContext, new_context: *SysCallContext) void;
 
-const TrapFrame = extern struct {
+pub const TrapFrame = extern struct {
     kernel_satp: u64, // kernel page table
     kernel_sp: u64, // top of process's kernel stack
     kernel_trap: u64, // usertrap()
@@ -125,7 +125,6 @@ open_files: [fs.MAX_OPEN_FILES]?*File,
 trapframe: ?*TrapFrame,
 call_context: SysCallContext,
 name: [NAME_SIZE]u8,
-
 pub fn init() void {
     proc_glob_lock = Spinlock.init("proc_glob_lock");
     pid_lock = Spinlock.init("pid_lock");
@@ -169,6 +168,7 @@ pub fn alloc() !*Self {
 
     proc.call_context = std.mem.zeroes(SysCallContext);
     proc.call_context.ra = @intFromPtr(&Trap.forkReturn);
+    proc.call_context.sp = proc.kstackPtr;
 
     return proc;
 }
@@ -207,6 +207,7 @@ pub fn setKilled(self: *Self) void {
     self.killed = true;
     self.lock.release();
 }
+
 pub fn fileDescriptorAlloc(self: *Self, file: *File) !u64 {
     for (0..fs.MAX_OPEN_FILES) |i| {
         if (self.open_files[i] == null) {
@@ -225,9 +226,9 @@ pub fn yield(self: *Self) void {
     self.lock.release();
 }
 
-pub fn fork(self: *Self) !void {
+pub fn fork(self: *Self) !u64 {
     const newProc = try alloc();
-    self.pagetable.?.copy(newProc.pagetable.?, self.mem_size) catch |e| {
+    self.pagetable.?.copy(&newProc.pagetable.?, self.mem_size) catch |e| {
         newProc.free() catch unreachable;
         newProc.lock.release();
         return e;
@@ -285,10 +286,13 @@ pub fn exit(self: *Self, status: i64) void {
     self.exit_status = status;
     self.state = .Zombie;
     proc_glob_lock.release();
+
+    self.switchToScheduler();
+    lib.kpanic("ZOMBIE WALKING");
 }
 
 pub fn initPageTable(self: *Self) !void {
-    self.pagetable = try getTrapFrameMappedPageTable(self);
+    self.pagetable = try self.getTrapFrameMappedPageTable();
 }
 
 pub fn getTrapFrameMappedPageTable(self: *Self) !PageTable {
@@ -301,21 +305,26 @@ pub fn getTrapFrameMappedPageTable(self: *Self) !PageTable {
         mem.PTE_R | mem.PTE_X,
     );
 
+    if (self.trapframe == null) {
+        lib.kpanic("trapframe is null");
+    }
+
     try new_pagetable.mapPages(
         riscv.TRAPFRAME,
         @intFromPtr(self.trapframe.?),
         riscv.PGSIZE,
         mem.PTE_R | mem.PTE_W,
     );
+
     return new_pagetable;
 }
 
 pub fn userInit() !void {
     const proc = try alloc();
+    defer proc.lock.release();
     init_proc = proc;
-
     // allocate code memory
-    const page: riscv.Page = @ptrCast(try KMem.allocZeroed());
+    const page: *riscv.Page = @ptrCast(try KMem.allocZeroed());
     try proc.pagetable.?.mapPages(
         0,
         @intFromPtr(page),
@@ -326,12 +335,11 @@ pub fn userInit() !void {
 
     proc.mem_size = riscv.PGSIZE;
     proc.trapframe.?.epc = 0;
+    proc.trapframe.?.sp = riscv.PGSIZE;
     proc.state = .Runnable;
 
     proc.cwd = try INodeTable.getNamedInode("/");
     lib.strCopy(proc.name[0..], "init", 4);
-    proc.cwd = try INodeTable.namedInode("/");
-    proc.lock.release();
 }
 
 pub fn scheduler() void {
@@ -377,7 +385,7 @@ pub fn current() ?*Self {
     return cpu.proc;
 }
 
-pub fn currentOrPanic() *Self {
+pub inline fn currentOrPanic() *Self {
     const proc = current() orelse lib.kpanic("No current process");
     return proc;
 }

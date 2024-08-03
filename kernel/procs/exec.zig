@@ -1,7 +1,6 @@
 const elf = @import("../fs/elf.zig");
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
-const tools = @import("../tools/blockdump.zig");
 
 const mem = @import("../mem/mem.zig");
 
@@ -12,22 +11,17 @@ const Pagetable = @import("../mem/pagetable.zig");
 const Log = @import("../fs/log.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 
-pub fn exec(path: [*:0]const u8) !void {
-    const proc = Process.currentOrPanic();
-    lib.println("EXEC STARTED \n\n");
+pub fn exec(path: [*:0]u8) !void {
     Log.beginTx();
     defer Log.endTx();
 
     const inode = try INodeTable.namedInode(path);
     inode.lock();
-
     defer inode.release();
 
     var elf_header: elf.ElfHeader = undefined;
 
     const read_size = try inode.readToAddress(@intFromPtr(&elf_header), 0, @sizeOf(elf.ElfHeader), false);
-
-    lib.printAndInt("read_size: ", read_size);
 
     if (read_size != @sizeOf(elf.ElfHeader)) {
         return error.InvalidElfHeader;
@@ -46,7 +40,8 @@ pub fn exec(path: [*:0]const u8) !void {
 
     while (cur_program_header < elf_header.program_header_count) : (cur_program_header += 1) {
         var program_header: elf.ProgramHeader = undefined;
-        const ph_read_size = try inode.readToAddress(@intFromPtr(&program_header), cur_program_header * @sizeOf(elf.ProgramHeader), @sizeOf(elf.ProgramHeader), false);
+        const cur_program_header_file_offset = elf_header.program_header_offset + cur_program_header * @sizeOf(elf.ProgramHeader);
+        const ph_read_size = try inode.readToAddress(@intFromPtr(&program_header), cur_program_header_file_offset, @sizeOf(elf.ProgramHeader), false);
         if (ph_read_size != @sizeOf(elf.ProgramHeader)) {
             return error.InvalidElfProgramHeader;
         }
@@ -73,10 +68,11 @@ pub fn exec(path: [*:0]const u8) !void {
     const page_aligned_size = mem.pageAlignUp(user_space_size);
     const stack_top = page_aligned_size + 2 * riscv.PGSIZE;
     _ = try pagetable.userAlloc(page_aligned_size, stack_top, mem.PTE_W);
-    // add guard page
-    try pagetable.revokeUserPage(page_aligned_size + riscv.PGSIZE);
-    // const stack_base = stack_top - riscv.PGSIZE;
 
+    // add guard page before top
+    try pagetable.revokeUserPage(page_aligned_size);
+
+    // const stack_base = stack_top - riscv.PGSIZE;
     var last_back_slash: u16 = 0;
     var i: u16 = 0;
     while (path[i] != 0) : (i += 1) {
@@ -86,6 +82,14 @@ pub fn exec(path: [*:0]const u8) !void {
     }
 
     lib.strCopyNullTerm(&proc.name, path[last_back_slash + 1 ..], Process.NAME_SIZE);
+
+    var old_pagetable = proc.pagetable.?;
+    proc.pagetable = pagetable;
+    proc.mem_size = stack_top;
+    proc.trapframe.?.epc = elf_header.entry;
+    proc.trapframe.?.sp = stack_top;
+
+    try old_pagetable.userFree(old_mem_size);
     // TODO: set up stack
 }
 
@@ -104,9 +108,9 @@ fn loadSegment(pagetable: *Pagetable, virtual_addr: u64, inode: *INode, file_off
 
     while (cur_offset < size) : (cur_offset += riscv.PGSIZE) {
         const page = try pagetable.getUserPhysAddrFromVa(virtual_addr + cur_offset);
-
+        const page_offset: u64 = @intFromPtr(page) + virtual_addr % riscv.PGSIZE;
         const bytes_to_read = if (size - cur_offset < riscv.PGSIZE) size - cur_offset else riscv.PGSIZE;
-        const bytes_read = try inode.readToAddress(@intFromPtr(page), file_offset + cur_offset, bytes_to_read, false);
+        const bytes_read = try inode.readToAddress(page_offset, file_offset + cur_offset, bytes_to_read, false);
         if (bytes_read != bytes_to_read) {
             return error.InodeReadError;
         }

@@ -168,8 +168,22 @@ pub fn copyInto(self: *Self, dest: u64, src: *[]u8, size: u64) !void {
     // var cur_dest_addr = dest;
     // while (bytes_left > 0) {
     //     const virtual_address = mem.pageAlignDown(cur_dest_addr);
-    //     const kernel_mem_addr = self.getPhysAddrFromVa(virtual_address);
+    //     const kernel_mem_addr = self.getPageTableEntry(virtual_address);
     // }
+}
+
+pub fn copyFrom(self: *Self, src: u64, dest: [*]u8, size: u64) !void {
+    var bytes_written: u64 = 0;
+    while (bytes_written < size) {
+        const current_virtual_addr = src + bytes_written;
+        const current_page = mem.pageAlignDown(current_virtual_addr);
+        const page_offset = mem.pageOffset(current_virtual_addr);
+        const pte = try self.getPageTableEntry(current_page, false);
+        const kernel_page: *riscv.Page = @ptrCast(pageTableEntryToPhysAddr(pte.*));
+        const bytes_to_copy = @min(size - bytes_written, riscv.PGSIZE - page_offset);
+        @memcpy(dest[bytes_written..][0..bytes_to_copy], kernel_page[page_offset..][0..bytes_to_copy]);
+        bytes_written += bytes_to_copy;
+    }
 }
 
 pub fn getUserPhysAddrFromVa(self: *Self, virtual_address: u64) !*u64 {
