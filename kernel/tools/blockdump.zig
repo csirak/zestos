@@ -1,17 +1,15 @@
 const fs = @import("../fs/fs.zig");
 const lib = @import("../lib.zig");
 
-pub fn blockDump(block_num: u16, block: *fs.Block, row_width: comptime_int) void {
-    if (fs.BLOCK_SIZE % row_width != 0) {
+pub fn bytesDump(bytes: *[]u8, row_width: comptime_int, total_bytes: comptime_int, address_offset: u64) void {
+    if (total_bytes % row_width != 0) {
         lib.kpanic("Row width is not a multiple of block size\n");
     }
-
-    logBlockInfo(block_num);
     logHeader(row_width);
-    const row_nums = fs.BLOCK_SIZE / row_width;
-    const row_aligned_block: *[row_nums][row_width]u8 = @ptrCast(block);
+    const row_nums = @divExact(total_bytes, row_width);
+    const row_aligned_block: *const [row_nums][row_width]u8 = @ptrCast(bytes);
     for (row_aligned_block, 0..) |row, i| {
-        lib.printIntHex(@intCast(i * row_width));
+        lib.printIntHex(@intCast(address_offset + i * row_width));
         tab();
         lib.put_char('|');
 
@@ -23,7 +21,8 @@ pub fn blockDump(block_num: u16, block: *fs.Block, row_width: comptime_int) void
         lib.put_char('|');
 
         for (row) |byte| {
-            lib.put_char((byte));
+            lib.put_char(filterChar(byte));
+            space();
             space();
         }
         newline();
@@ -31,29 +30,16 @@ pub fn blockDump(block_num: u16, block: *fs.Block, row_width: comptime_int) void
     newline();
 }
 
-pub fn bytesDump(bytes: *[]u8, row_width: comptime_int, total_bytes: comptime_int) void {
-    logHeader(row_width);
-    const row_nums = total_bytes / row_width;
-    const row_aligned_block: *const [row_nums][row_width]u8 = @ptrCast(bytes);
-    for (row_aligned_block, 0..) |row, i| {
-        lib.printIntHex(@intCast(i * row_width));
-        tab();
-        lib.put_char('|');
+pub fn blockDump(block_num: u16, block: *fs.Block, row_width: comptime_int) void {
+    logBlockInfo(block_num);
+    bytesDump(@alignCast(@ptrCast(block)), row_width, fs.BLOCK_SIZE, block_num * fs.BLOCK_SIZE);
+}
 
-        for (row) |byte| {
-            lib.printByte((byte));
-            space();
-        }
-        tab();
-        lib.put_char('|');
-
-        for (row) |byte| {
-            lib.put_char((byte));
-            space();
-        }
-        newline();
+fn filterChar(c: u8) u8 {
+    if (c < 40) {
+        return ' ';
     }
-    newline();
+    return c;
 }
 
 pub fn bufferDump(inum: u16, block: *fs.Block, row_width: comptime_int) void {
