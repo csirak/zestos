@@ -44,3 +44,15 @@ inline fn timerInit() void {
     riscv.w_mstatus(riscv.r_mstatus() | riscv.MSTATUS_MIE);
     riscv.w_mie(riscv.r_mie() | riscv.MIE_MTIE);
 }
+
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    lib.println("\nKERNEL PANIC: ");
+    lib.printAndInt("stack: ", riscv.r_sp());
+    lib.printAndInt("stval: ", riscv.r_stval());
+    lib.printAndInt("sepc: ", riscv.r_sepc());
+    lib.printAndInt("ra: ", riscv.r_ra());
+    lib.printAndInt("cause: ", riscv.r_scause());
+    lib.println(msg);
+    asm volatile ("ebreak");
+    lib.kpanic(msg);
+}
