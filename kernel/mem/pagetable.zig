@@ -3,7 +3,7 @@ const mem = @import("mem.zig");
 const KMem = @import("kmem.zig");
 const lib = @import("../lib.zig");
 
-const PAGETABLE_SIZE = riscv.PGSIZE / @sizeOf(u64);
+const PAGETABLE_SIZE = @divExact(riscv.PGSIZE, @sizeOf(u64));
 // 9 bit mask
 const PX_MASK = 0x1ff;
 const PTE_FLAGS_MASK = 0x3ff;
@@ -22,20 +22,18 @@ pub fn init() !Self {
     };
 }
 
-pub fn userInit() !void {}
-
 pub fn userFree(self: *Self, size: u64) !void {
     try self.unMapPages(riscv.TRAMPOLINE, 1, false);
     try self.unMapPages(riscv.TRAPFRAME, 1, false);
 
     if (size > 0) {
-        const num_pages = mem.pageAlignUp(size) / riscv.PGSIZE;
+        const num_pages = @divExact(mem.pageAlignUp(size), riscv.PGSIZE);
         try self.unMapPages(0, num_pages, true);
     }
     try freeTable(self.table);
 }
 
-pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
+pub fn getPageTableEntry(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
     if (virtual_address > riscv.MAXVA) {
         lib.kpanic("va overflow");
     }
@@ -43,7 +41,6 @@ pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
     for (0..2) |offset| {
         const level = 2 - offset;
         const pte = &cur_pagetable[pageTableLevelIndex(virtual_address, @intCast(level))];
-
         if (pte.* & mem.PTE_V != 0) {
             cur_pagetable = @ptrCast(pageTableEntryToPhysAddr(pte.*));
         } else if (alloc) {
@@ -60,19 +57,22 @@ pub fn getPhysAddrFromVa(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
 pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
     const virtual_address_page_aligned = mem.pageAlignDown(virtual_address);
 
-    var page_offset: u64 = 0;
     const last_page = mem.pageAlignDown(virtual_address + size - 1);
 
     if ((last_page - virtual_address_page_aligned) % riscv.PGSIZE != 0) {
         lib.kpanic("not page align");
     }
 
-    while (virtual_address_page_aligned + page_offset <= last_page) : (page_offset += riscv.PGSIZE) {
-        const pte = try self.getPhysAddrFromVa(virtual_address_page_aligned + page_offset, true);
+    var va = virtual_address_page_aligned;
+    var pa = physical_address;
+    while (va <= last_page) {
+        const pte = try self.getPageTableEntry(va, true);
         if (pte.* & mem.PTE_V != 0) {
             return error.MappedPageAlreadyAllocated;
         }
-        pte.* = physAddrToPTE(@ptrFromInt(physical_address + page_offset)) | flags | mem.PTE_V;
+        pte.* = physAddrToPTE(@ptrFromInt(pa)) | flags | mem.PTE_V;
+        va += riscv.PGSIZE;
+        pa += riscv.PGSIZE;
     }
 }
 
@@ -83,8 +83,8 @@ pub fn unMapPages(self: *Self, virtual_address: u64, num_pages: u64, freePages: 
 
     var cur_virtual_address = virtual_address;
 
-    while (cur_virtual_address <= virtual_address + num_pages * riscv.PGSIZE) : (cur_virtual_address += riscv.PGSIZE) {
-        const pte = try self.getPhysAddrFromVa(cur_virtual_address, false);
+    while (cur_virtual_address < virtual_address + num_pages * riscv.PGSIZE) : (cur_virtual_address += riscv.PGSIZE) {
+        const pte = try self.getPageTableEntry(cur_virtual_address, false);
         if (pte.* & mem.PTE_V == 0) {
             return error.PageNotMapped;
         }
@@ -101,7 +101,7 @@ pub fn unMapPages(self: *Self, virtual_address: u64, num_pages: u64, freePages: 
 pub fn copy(self: *Self, dest: *Self, size: u64) !void {
     var i: u64 = 0;
     while (i < size) : (i += riscv.PGSIZE) {
-        const pte = try self.getPhysAddrFromVa(i, false);
+        const pte = try self.getPageTableEntry(i, false);
         if (pte.* & mem.PTE_V != 0) {
             lib.kpanic("page table entry is not valid\n");
         }
@@ -111,7 +111,7 @@ pub fn copy(self: *Self, dest: *Self, size: u64) !void {
         const page: Table = @ptrCast(try KMem.alloc());
 
         @memcpy(page, phys_address_page);
-        try dest.mapPages(i, @intFromPtr(page), riscv.PGSIZE, flags);
+        try dest.mapPages(i, @intFromPtr(page), riscv.PGSIZE, @intCast(flags));
     }
 }
 
@@ -138,7 +138,7 @@ pub fn userAlloc(self: *Self, old_size: u64, new_size: u64, flags: u16) !u64 {
 }
 
 pub fn revokeUserPage(self: *Self, virtual_address: u64) !void {
-    const pte = try self.getPhysAddrFromVa(virtual_address, false);
+    const pte = try self.getPageTableEntry(virtual_address, false);
     pte.* &= ~(mem.PTE_U);
 }
 
@@ -148,7 +148,7 @@ pub fn userDeAlloc(self: *Self, old_size: u64, new_size: u64) !u64 {
     }
 
     const new_page_aligned_addr = mem.pageAlignUp(new_size);
-    const num_pages = (mem.pageAlignUp(old_size) - new_page_aligned_addr) / riscv.PGSIZE;
+    const num_pages = @divExact((mem.pageAlignUp(old_size) - new_page_aligned_addr), riscv.PGSIZE);
     if (num_pages == 0) {
         return new_size;
     }
@@ -176,7 +176,7 @@ pub fn getUserPhysAddrFromVa(self: *Self, virtual_address: u64) !*u64 {
     if (virtual_address > riscv.MAXVA) {
         return error.VirtualAddressOutOfBounds;
     }
-    const pte = try self.getPhysAddrFromVa(virtual_address, false);
+    const pte = try self.getPageTableEntry(virtual_address, false);
     if (pte.* == 0) {
         return error.PageNotMapped;
     }
@@ -202,7 +202,7 @@ inline fn pageTableLevelIndex(address: u64, level: u6) u64 {
     return (address >> shift_depth) & PX_MASK;
 }
 
-inline fn pageTableEntryToPhysAddr(pte: u64) *u64 {
+pub inline fn pageTableEntryToPhysAddr(pte: u64) *u64 {
     return @ptrFromInt((pte >> PTE_FLAGS_SIZE) << PG_OFFSET_SIZE);
 }
 

@@ -81,7 +81,7 @@ pub fn userTrapReturn() void {
     riscv.w_stvec(user_vec_trampoline);
 
     proc.trapframe.?.kernel_satp = riscv.r_satp();
-    proc.trapframe.?.kernel_sp = proc.kstackPtr + riscv.PGSIZE;
+    proc.trapframe.?.kernel_sp = proc.kstackPtr;
     proc.trapframe.?.kernel_trap = @intFromPtr(&userTrap);
     proc.trapframe.?.kernel_hartid = riscv.r_tp();
 

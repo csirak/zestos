@@ -1,8 +1,10 @@
-pub const Page = *[PGSIZE]u8;
+pub const Page = [PGSIZE]u8;
 
 pub const NCPU = 4;
 pub const MAX_PROCS = 64;
 pub const PGSIZE = 4096; // bytes per page
+
+pub const KSTACK_SIZE = 2 * PGSIZE;
 
 pub const UART0: u64 = 0x10000000;
 pub const UART0_IRQ: u64 = 10;
@@ -33,7 +35,7 @@ pub const TRAPFRAME: u64 = (TRAMPOLINE - PGSIZE);
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
 pub inline fn KSTACK(p: u64) u64 {
-    return TRAMPOLINE - ((p) + 1) * 2 * PGSIZE;
+    return TRAPFRAME - ((p) + 1) * (KSTACK_SIZE + PGSIZE);
 }
 
 // Machine Status Register, mstatus
@@ -64,6 +66,7 @@ pub const SCAUSE_TYPE_MASK: u64 = 1 << 63; // Interrupt
 pub const SCAUSE_FLAG_MASK: u64 = 0xFF; // Status
 
 pub const SCAUSE_INT_SOFTWARE: u64 = 1;
+pub const SCAUSE_TRAP_BREAKPOINT: u64 = 3;
 pub const SCAUSE_TRAP_SYSCALL: u64 = 8;
 pub const SCAUSE_INT_PLIC: u64 = 9;
 

@@ -1,5 +1,5 @@
 const mem = @import("mem.zig");
-const PageTable = @import("PageTable.zig");
+const PageTable = @import("pagetable.zig");
 
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
@@ -85,13 +85,15 @@ fn mapKernelPages() !void {
     try pagetable.mapPages(riscv.TRAMPOLINE, trampoline_addr, riscv.PGSIZE, mem.PTE_R | mem.PTE_X);
 
     for (0..riscv.MAX_PROCS) |i| {
-        const page = try alloc();
+        const page1 = try alloc();
+        const page2 = try alloc();
         const virtual_address = riscv.KSTACK(i);
-        try pagetable.mapPages(virtual_address, @intFromPtr(page), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+        try pagetable.mapPages(virtual_address, @intFromPtr(page1), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+        try pagetable.mapPages(virtual_address + riscv.PGSIZE, @intFromPtr(page2), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
     }
 }
 
-fn getFreePage() !*[riscv.PGSIZE]u8 {
+fn getFreePage() !*riscv.Page {
     lock.acquire();
     const p = freed orelse undefined;
     if (p == undefined) {

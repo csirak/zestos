@@ -133,7 +133,7 @@ pub fn init() void {
     for (0..riscv.MAX_PROCS) |i| {
         PROCS[i].lock = Spinlock.init("proc");
         PROCS[i].state = .Unused;
-        PROCS[i].kstackPtr = riscv.KSTACK(i);
+        PROCS[i].kstackPtr = riscv.KSTACK(i) + riscv.KSTACK_SIZE;
     }
 }
 
@@ -165,7 +165,7 @@ pub fn alloc() !*Self {
 
     proc.call_context = std.mem.zeroes(SysCallContext);
     proc.call_context.ra = @intFromPtr(&Trap.forkReturn);
-    proc.call_context.sp = proc.kstackPtr + riscv.PGSIZE;
+
     return proc;
 }
 
