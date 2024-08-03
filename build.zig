@@ -1,61 +1,69 @@
 const std = @import("std");
-const Builder = @import("std").build.Builder;
-const Target = @import("std").Target;
-const CrossTarget = @import("std").zig.CrossTarget;
-const Feature = @import("std").Target.Cpu.Feature;
+const Target = std.Target;
+const CrossTarget = std.zig.CrossTarget;
+const Feature = std.Target.Cpu.Feature;
 
 const objFiles = [_][]u8{"main"};
 
-pub fn build(b: *Builder) void {
-    const target = CrossTarget{ .cpu_arch = Target.Cpu.Arch.riscv64, .os_tag = Target.Os.Tag.freestanding };
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{ .default_target = .{
+        .cpu_arch = Target.Cpu.Arch.riscv64,
+        .os_tag = Target.Os.Tag.freestanding,
+    } });
 
     const optimize = b.standardOptimizeOption(.{
         .preferred_optimize_mode = .ReleaseSmall,
     });
 
-    const kernel = b.addExecutable(.{ .name = "kernel", .root_source_file = .{ .path = "kernel/entry.zig" }, .optimize = optimize, .target = target, .linkage = std.build.CompileStep.Linkage.static });
-    kernel.code_model = .medium;
+    const kernel = b.addExecutable(.{
+        .name = "kernel",
+        .root_source_file = b.path("kernel/entry.zig"),
+        .optimize = optimize,
+        .target = target,
+        .linkage = .static,
+        .code_model = .medium,
+    });
 
     const start = b.addObject(.{
         .name = "start",
-        .root_source_file = .{ .path = "kernel/start.zig" },
+        .root_source_file = b.path("kernel/start.zig"),
+        .target = target,
+        .optimize = optimize,
+        .code_model = .medium,
+    });
+
+    const kernelvec = b.addObject(.{
+        .name = "kernelvec",
+        .root_source_file = b.path("kernel/kernelvec.zig"),
         .target = target,
         .optimize = optimize,
     });
-    start.code_model = .medium;
-
-    // const main = b.addObject(.{
-    //     .name = "main",
-    //     .root_source_file = .{ .path = "kernel/main.zig" },
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // main.code_model = .medium;
 
     const trampoline = b.addObject(.{
         .name = "trampoline",
-        .root_source_file = .{ .path = "kernel/trampoline.zig" },
+        .root_source_file = b.path("kernel/trampoline.zig"),
         .target = target,
         .optimize = optimize,
+        .code_model = .medium,
     });
-    trampoline.code_model = .medium;
 
-    trampoline.addIncludePath(.{ .path = "kernel" });
+    trampoline.addIncludePath(b.path("kernel"));
 
-    // const lib = b.addObject(.{
-    //     .name = "lib",
-    //     .root_source_file = .{ .path = "kernel/lib.zig" },
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
+    const trap = b.addObject(.{
+        .name = "trap",
+        .root_source_file = b.path("kernel/trap.zig"),
+        .target = target,
+        .optimize = optimize,
+        .code_model = .medium,
+    });
 
-    kernel.addIncludePath(.{ .path = "kernel" });
-    kernel.setLinkerScript(.{ .path = "kernel/kernel.ld" });
+    kernel.addIncludePath(b.path("kernel"));
+    kernel.setLinkerScript(b.path("kernel/kernel.ld"));
     kernel.addObject(start);
     kernel.addObject(trampoline);
 
-    // kernel.addObject(main);
-    // kernel.addObject(lib);
+    kernel.addObject(kernelvec);
+    kernel.addObject(trap);
 
     b.installArtifact(kernel);
 
@@ -64,7 +72,7 @@ pub fn build(b: *Builder) void {
         "-m",
         "512",
         "-smp",
-        "1",
+        "4",
         "-no-reboot",
         "-nographic",
         "-bios",
@@ -86,7 +94,7 @@ pub fn build(b: *Builder) void {
         "-m",
         "512",
         "-smp",
-        "1",
+        "4",
         "-no-reboot",
         "-nographic",
         "-bios",
