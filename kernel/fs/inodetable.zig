@@ -105,7 +105,6 @@ fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
     while (path[i] == '/') : (i += 1) {}
 
     if (path[i] == 0) {
-        lib.println("ITS OVER");
         return 0xFFFF;
     }
 

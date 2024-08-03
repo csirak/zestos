@@ -23,10 +23,10 @@ var log_header: Header = undefined;
 pub fn init(dev: u16, super_block: *fs.SuperBlock) !void {
     lock = Spinlock.init("log");
     device = dev;
-    start_block = super_block.log_start;
-    size = super_block.num_log_blocks;
+    start_block = @intCast(super_block.log_start);
+    size = @intCast(super_block.num_log_blocks);
 
-    recoverFromLog();
+    try recoverFromLog();
 }
 
 pub fn recoverFromLog() !void {

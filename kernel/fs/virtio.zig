@@ -156,9 +156,9 @@ pub fn init() void {
     const available_page = KMem.alloc() catch lib.kpanic("virtio: failed to allocate available");
     const used_page = KMem.alloc() catch lib.kpanic("virtio: failed to allocate used");
 
-    const descriptor_arr: *[riscv.PGSIZE]u8 = @ptrCast(descriptor_page);
-    const available_arr: *[riscv.PGSIZE]u8 = @ptrCast(available_page);
-    const used_arr: *[riscv.PGSIZE]u8 = @ptrCast(used_page);
+    const descriptor_arr: *riscv.Page = @ptrCast(descriptor_page);
+    const available_arr: *riscv.Page = @ptrCast(available_page);
+    const used_arr: *riscv.Page = @ptrCast(used_page);
 
     @memset(descriptor_arr, 0);
     @memset(available_arr, 0);
@@ -226,8 +226,8 @@ pub fn diskInterrupt() void {
     }
 }
 
-fn read_write(buf: *Buffer, write: bool) void {
-    const sector = buf.block_num * (fs.BLOCK_SIZE / 512);
+inline fn read_write(buf: *Buffer, comptime write: bool) void {
+    const sector = buf.block_num * @divExact(fs.BLOCK_SIZE, 512);
 
     lock.acquire();
     defer lock.release();
@@ -287,7 +287,7 @@ fn read_write(buf: *Buffer, write: bool) void {
     freeDescriptorChain(indexes[0]);
 }
 
-fn alloc3Descriptors(indexes: *[3]u16) !void {
+inline fn alloc3Descriptors(indexes: *[3]u16) !void {
     var i: u16 = 0;
     while (i < 3) : (i += 1) {
         indexes[i] = allocDescriptor() catch {

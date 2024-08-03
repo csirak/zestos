@@ -28,11 +28,11 @@ pub fn lock(self: *Self) void {
     }
 
     const buffer = BufferCache.read(self.device, fs.inodeBlockNum(self.inum));
+    defer BufferCache.release(buffer);
 
     const inode_ptr: *[fs.INODES_PER_BLOCK]fs.DiskINode = @ptrCast(&buffer.data);
     self.disk_inode = inode_ptr[self.inum % fs.INODES_PER_BLOCK];
     self.valid = true;
-    buffer.sleeplock.release();
 }
 
 pub fn release(self: *Self) void {
@@ -68,8 +68,9 @@ pub fn mapBlock(self: *Self, addr_index: u16) u32 {
     const indirect_addr_block_num = self.disk_inode.direct[fs.DIRECT_ADDRESS_SIZE];
     const indirect_addr_block_buffer = BufferCache.read(self.device, @intCast(indirect_addr_block_num));
     defer BufferCache.release(indirect_addr_block_buffer);
+    const indireact_addrs: *fs.IndirectAddressBlock = @ptrCast(@alignCast(&indirect_addr_block_buffer.data));
 
-    const indirect_addr = indirect_addr_block_buffer.data[indirect_addr_index];
+    const indirect_addr = indireact_addrs[indirect_addr_index];
     if (indirect_addr != 0) {
         return indirect_addr;
     }
@@ -82,7 +83,7 @@ pub fn mapBlock(self: *Self, addr_index: u16) u32 {
     return new_indirect_addr;
 }
 
-pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, user_addr: bool) !u32 {
+pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, user_space: bool) !u32 {
     if (self.disk_inode.size < file_start) {
         return error.OutOfBounds;
     }
@@ -92,14 +93,14 @@ pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, use
 
     var bytes_read: u32 = 0;
     while (bytes_read < size) {
-        const addr_index: u16 = @intCast(file_offset / fs.BLOCK_SIZE);
+        const addr_index: u16 = @intCast(@divFloor(file_offset, fs.BLOCK_SIZE));
         const block_addr = self.mapBlock(addr_index);
         const block_buffer = BufferCache.read(self.device, @intCast(block_addr));
         defer BufferCache.release(block_buffer);
         const bytes_to_write: u32 = @intCast(@min(size - bytes_read, fs.BLOCK_SIZE - (file_offset % fs.BLOCK_SIZE)));
         const bytes_offset = file_offset % fs.BLOCK_SIZE;
         var src = block_buffer.data[bytes_offset..];
-        if (user_addr) {
+        if (user_space) {
             var user_pagetable = Process.currentOrPanic().pagetable.?;
             try user_pagetable.copyInto(cur_dest, &src, bytes_to_write);
         } else {
