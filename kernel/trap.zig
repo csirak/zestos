@@ -1,5 +1,6 @@
 const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
+const fs = @import("fs/fs.zig");
 
 const Spinlock = @import("locks/spinlock.zig");
 const StdOut = @import("io/stdout.zig");
@@ -11,6 +12,7 @@ const Interrupt = enum { Timer, Software, External, Syscall, Unknown };
 
 var ticks: u64 = 0;
 var tickslock: Spinlock = undefined;
+var first_ret = true;
 
 extern fn kernelvec() void;
 extern fn uservec() void;
@@ -103,6 +105,12 @@ pub fn forkReturn() void {
     // make sure to boot fs when running
     const proc = Process.currentOrPanic();
     proc.lock.release();
+
+    if (first_ret) {
+        first_ret = false;
+        fs.init();
+    }
+
     userTrapReturn();
 }
 
