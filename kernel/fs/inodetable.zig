@@ -12,8 +12,8 @@ var inodes: [fs.NUM_INODES]INode = undefined;
 
 pub fn init() void {
     lock = Spinlock.init("inode table");
-    for (&inodes) |*inode| {
-        inode.sleep_lock = Sleeplock.init("inode table");
+    for (&inodes, 0..) |*inode, i| {
+        inode.sleeplock = Sleeplock.initId("inode", @intCast(i));
     }
 }
 
