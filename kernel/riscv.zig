@@ -19,7 +19,7 @@ pub const TIMER_INTERVAL = 1000000;
 pub const CLINT_MTIME: *u64 = @ptrFromInt(CLINT + 0xBFF8);
 
 pub inline fn CLINT_MTIMECMP(hartid: u64) *u64 {
-    return @ptrFromInt(CLINT + 0x4000 + 8 * (hartid));
+    return @ptrFromInt(CLINT + 0x4000 + 8 * hartid);
 }
 
 pub const MAXVA: u64 = (1 << (9 + 9 + 9 + 12 - 1));
@@ -49,9 +49,9 @@ pub const MIE_MTIE: u64 = 1 << 7; // timer
 pub const MIE_MSIE: u64 = 1 << 3; // software
 
 // Supervisor Interrupt Enable
-pub const SIE_SEIE: u64 = 1 << 9; // external
-pub const SIE_STIE: u64 = 1 << 5; // timer
 pub const SIE_SSIE: u64 = 1 << 1; // software
+pub const SIE_STIE: u64 = 1 << 5; // timer
+pub const SIE_SEIE: u64 = 1 << 9; // external
 
 // Supervisor Status Register, sstatus
 pub const SSTATUS_SPP: u64 = 1 << 8; // Previous mode, 1=Supervisor, 0=User

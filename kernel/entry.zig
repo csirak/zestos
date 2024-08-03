@@ -1,6 +1,6 @@
 const riscv = @import("riscv.zig");
 
-export var stack0 align(16) = [_]u8{0} ** (riscv.PGSIZE * riscv.NCPU);
+export var stack0 = [_]u8{0} ** (riscv.PGSIZE * riscv.NCPU);
 
 comptime {
     asm (

@@ -3,7 +3,7 @@ const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
 const std = @import("std");
 
-export var timer_scratch align(16) = [_]u64{0} ** (riscv.NCPU * 5);
+export var timer_scratch = [_]u64{0} ** (riscv.NCPU * 5);
 
 export fn start() noreturn {
     const mstatus = riscv.r_mstatus();
@@ -38,7 +38,6 @@ inline fn timerInit() void {
     var timer_scratch_2d: *[riscv.NCPU][5]u64 = @ptrCast(&timer_scratch);
     timer_scratch_2d[tid][3] = @intFromPtr(clint_mtimecmp);
     timer_scratch_2d[tid][4] = riscv.TIMER_INTERVAL;
-
     riscv.w_mscratch(@intFromPtr(&timer_scratch_2d[tid]));
 
     riscv.w_mtvec(@intFromPtr(&timervec));
