@@ -1,18 +1,13 @@
 const std = @import("std");
-const Target = std.Target;
-const CrossTarget = std.zig.CrossTarget;
-const Feature = std.Target.Cpu.Feature;
-
-const objFiles = [_][]u8{"main"};
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{
-        .cpu_arch = Target.Cpu.Arch.riscv64,
-        .os_tag = Target.Os.Tag.freestanding,
+        .cpu_arch = .riscv64,
+        .os_tag = .freestanding,
     } });
 
     const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .ReleaseSmall,
+        .preferred_optimize_mode = .Debug,
     });
 
     const kernel = b.addExecutable(.{
@@ -54,21 +49,10 @@ pub fn build(b: *std.Build) void {
         .code_model = .medium,
     });
 
-    trampoline.addIncludePath(b.path("kernel"));
-
-    const trap = b.addObject(.{
-        .name = "trap",
-        .root_source_file = b.path("kernel/trap.zig"),
-        .target = target,
-        .optimize = optimize,
-        .code_model = .medium,
-    });
-
-    kernel.addIncludePath(b.path("kernel"));
     kernel.setLinkerScript(b.path("kernel/kernel.ld"));
+
     kernel.addObject(start);
     kernel.addObject(trampoline);
-
     kernel.addObject(kernelvec);
     kernel.addObject(switch_context);
 
@@ -80,7 +64,7 @@ pub fn build(b: *std.Build) void {
         "512",
         "-smp",
         "4",
-        // "2",
+        // "1",
         "-no-reboot",
         "-nographic",
         "-bios",
@@ -97,24 +81,8 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the kernel");
     run_step.dependOn(&run_cmd.step);
 
-    const debug_cmd_str = [_][]const u8{
-        "qemu-system-riscv64",
-        "-m",
-        "512",
-        "-smp",
-        "4",
-        // "2",
-        "-no-reboot",
-        "-nographic",
-        "-bios",
-        "none",
-        "-M",
-        "virt",
-        "-kernel",
-        "./zig-out/bin/kernel",
-        "-S",
-        "-s",
-    };
+    const debug_add = [_][]const u8{ "-S", "-s" };
+    const debug_cmd_str = run_cmd_str ++ debug_add;
 
     const debug_cmd = b.addSystemCommand(&debug_cmd_str);
     debug_cmd.step.dependOn(b.getInstallStep());
