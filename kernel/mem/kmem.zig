@@ -28,7 +28,7 @@ pub fn init() void {
     pagetable = PageTable.init() catch unreachable;
 
     mapKernelPages() catch |err| {
-        lib.printErr(err);
+        lib.printf("error: {}\n", .{err});
         lib.kpanic("Failed to map kernel pages");
         unreachable;
     };
@@ -68,7 +68,7 @@ pub fn free(pa: u64) void {
 pub fn printFreed() void {
     var p: ?*AddressNode = freed;
     while (p) |next| {
-        lib.printInt(@intFromPtr(next));
+        lib.printf("freed: {}\n", .{@intFromPtr(next)});
         p = next.*.next;
     }
 }

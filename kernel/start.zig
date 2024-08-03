@@ -47,11 +47,13 @@ inline fn timerInit() void {
 
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     lib.println("\nKERNEL PANIC: ");
-    lib.printAndInt("stack: ", riscv.r_sp());
-    lib.printAndInt("stval: ", riscv.r_stval());
-    lib.printAndInt("sepc: ", riscv.r_sepc());
-    lib.printAndInt("ra: ", riscv.r_ra());
-    lib.printAndInt("cause: ", riscv.r_scause());
+    lib.printf("pid: 0x{x}\n", .{p.getPid()});
+    }
+    lib.printf("stack: 0x{x}\n", .{riscv.r_sp()});
+    lib.printf("stval: 0x{x}\n", .{riscv.r_stval()});
+    lib.printf("sepc: 0x{x}\n", .{riscv.r_sepc()});
+    lib.printf("ra: 0x{x}\n", .{ra});
+    lib.printf("cause: 0x{x}\n", .{riscv.r_scause()});
     lib.println(msg);
     asm volatile ("ebreak");
     lib.kpanic(msg);

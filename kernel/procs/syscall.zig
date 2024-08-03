@@ -75,11 +75,11 @@ pub fn doSyscall() void {
 fn execSys(proc: *Process) void {
     const path_user_address = proc.trapframe.?.a0;
     proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.exec_path_buff), MAX_PATH) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
     exec(@ptrCast(&Static.exec_path_buff)) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to exec /init");
     };
 }
@@ -103,7 +103,7 @@ fn openSys(proc: *Process) i64 {
 
     const path_user_address = proc.trapframe.?.a0;
     proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.open_path_buff), MAX_PATH) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
 
@@ -161,10 +161,31 @@ fn openSys(proc: *Process) i64 {
     return @intCast(fd);
 }
 
+fn dupSys(proc: *Process) i64 {
+    const fd = proc.trapframe.?.a0;
+    const file = proc.open_files[fd].?;
+    const new_fd = proc.fileDescriptorAlloc(file) catch {
+        return -1;
+    };
+    return @intCast(new_fd);
+}
+
+fn writeSys(proc: *Process) i64 {
+    const fd = proc.trapframe.?.a0;
+    const file = proc.open_files[fd].?;
+    const buff_user_address = proc.trapframe.?.a1;
+    const size = proc.trapframe.?.a2;
+    file.write(buff_user_address, size) catch |e| {
+        lib.printf("error: {}\n", .{e});
+        return -1;
+    };
+    return 0;
+}
+
 fn makedNodeSys(proc: *Process) i64 {
     const path_user_address = proc.trapframe.?.a0;
     proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.makenode_path_buff), MAX_PATH) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
     const major: u16 = @intCast(proc.trapframe.?.a1);
@@ -172,7 +193,7 @@ fn makedNodeSys(proc: *Process) i64 {
     Log.beginTx();
     defer Log.endTx();
     const inode = INodeTable.create(@ptrCast(&Static.makenode_path_buff), fs.INODE_DEVICE, major, minor) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         return -1;
     };
     INodeTable.removeRefAndRelease(inode);

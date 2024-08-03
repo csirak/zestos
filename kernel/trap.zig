@@ -55,7 +55,6 @@ pub fn userTrap() void {
         },
 
         .Timer => {
-            lib.println("timer");
             proc.yield();
         },
 
@@ -65,7 +64,7 @@ pub fn userTrap() void {
 
         else => {
             proc.setKilled();
-            StdOut.kpanic("Unknown interrupt");
+            @panic("Unknown interrupt");
         },
     }
 
@@ -135,12 +134,12 @@ export fn kerneltrap() void {
 
     if (reason == .Unknown) {
         lib.println("");
-        StdOut.printAndInt("stack: ", riscv.r_sp());
-        StdOut.printAndInt("stval: ", riscv.r_stval());
-        StdOut.printAndInt("sepc: ", riscv.r_sepc());
-        StdOut.printAndInt("ra: ", riscv.r_ra());
-        StdOut.printAndInt("a0: ", riscv.r_a0());
-        StdOut.printAndInt("cause: ", scause);
+        StdOut.printf("stack: {}\n", .{riscv.r_sp()});
+        StdOut.printf("stval: {}\n", .{riscv.r_stval()});
+        StdOut.printf("sepc: {}\n", .{riscv.r_sepc()});
+        StdOut.printf("ra: {}\n", .{riscv.r_ra()});
+        StdOut.printf("a0: {}\n", .{riscv.r_a0()});
+        StdOut.printf("cause: {}\n", .{scause});
         StdOut.kpanic("Unknown interrupt");
     }
 
@@ -178,8 +177,7 @@ fn getSupervisorInterrupt(cause: u64) Interrupt {
             return .External;
         },
         else => {
-            StdOut.print("unknown fault: ");
-            StdOut.printInt(flag);
+            StdOut.printf("unknown fault: {}\n", .{flag});
             return .Unknown;
         },
     }
@@ -196,8 +194,7 @@ fn plicInterrupt() void {
             Virtio.diskInterrupt();
         },
         else => {
-            StdOut.println("plic interrupt");
-            StdOut.printInt(interrupt_id);
+            StdOut.printf("plic interrupt: {}\n", .{interrupt_id});
         },
     }
 

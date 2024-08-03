@@ -41,7 +41,7 @@ pub export fn main() void {
 
         Process.userInit() catch |e| {
             lib.println("error initializing user process");
-            lib.printErr(e);
+            lib.printf("error: {}\n", .{e});
         };
 
         started = true;

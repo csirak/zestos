@@ -115,7 +115,7 @@ pub fn init() void {
         lib.kpanic("Invalid superblock");
     }
     Log.init(ROOT_DEVICE, super_block) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to initialize log");
     };
     loaded_super_block = super_block.*;

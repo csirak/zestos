@@ -25,7 +25,7 @@ pub fn init() void {
 pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
     var name: [fs.DIR_NAME_SIZE]u8 = undefined;
     const parent = getWithPath(@ptrCast(path), true, @ptrCast(&name)) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         return error.ParentDirDoesntExist;
     };
     parent.lock();
@@ -41,7 +41,7 @@ pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
     }
 
     const create_inode = alloc(parent.device, typ) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
         return error.NoFreeInodesOnDisk;
     };
 
@@ -218,7 +218,7 @@ fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
 
     while (offset < dir.disk_inode.size) : (offset += @sizeOf(fs.DirEntry)) {
         _ = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
-            lib.printErr(e);
+            lib.printf("error: {}\n", .{e});
             return null;
         };
         if (entry.inum == 0) {
@@ -245,7 +245,7 @@ pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) void {
     var entry: fs.DirEntry = undefined;
     while (offset < dir.disk_inode.size) : (offset += @sizeOf(fs.DirEntry)) {
         const read = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
-            lib.printErr(e);
+            lib.printf("error: {}\n", .{e});
             return;
         };
         if (read != @sizeOf(fs.DirEntry)) {
@@ -258,6 +258,6 @@ pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) void {
     lib.strCopyNullTerm(&entry.name, @ptrCast(name), fs.DIR_NAME_SIZE);
     entry.inum = inum;
     _ = dir.writeTo(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
-        lib.printErr(e);
+        lib.printf("error: {}\n", .{e});
     };
 }

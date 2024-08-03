@@ -34,7 +34,11 @@ pub fn exec(path: [*:0]u8) !void {
     var cur_program_header: usize = 0;
     var user_space_size: u64 = 0;
 
+    const proc = Process.currentOrPanic();
+
+    const old_mem_size = proc.mem_size;
     var pagetable = try proc.getTrapFrameMappedPageTable();
+
     // TODO: Make sure this var is value is not copied directly
     errdefer pagetable.userFree(user_space_size) catch unreachable;
 

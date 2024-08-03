@@ -23,21 +23,9 @@ pub fn print(s: []const u8) void {
     lock.release();
 }
 
-pub fn printInt(i: u64) void {
+pub fn printf(comptime fmt: []const u8, args: anytype) void {
     lock.acquire();
-    lib.printInt(i);
-    lock.release();
-}
-
-pub inline fn printAndInt(s: []const u8, n: u64) void {
-    lock.acquire();
-    lib.printAndInt(s, n);
-    lock.release();
-}
-
-pub fn printAndDec(s: []const u8, n: u64) void {
-    lock.acquire();
-    lib.printAndDec(s, n);
+    lib.printf(fmt, args);
     lock.release();
 }
 

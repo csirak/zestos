@@ -22,5 +22,5 @@ pub fn alloc() *File {
         }
     }
 
-    lib.kpanic("buffer cache is full");
+    @panic("buffer cache is full");
 }

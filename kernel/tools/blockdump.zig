@@ -9,7 +9,7 @@ pub fn bytesDump(bytes: *[]u8, row_width: comptime_int, total_bytes: comptime_in
     const row_nums = @divExact(total_bytes, row_width);
     const row_aligned_block: *const [row_nums][row_width]u8 = @ptrCast(bytes);
     for (row_aligned_block, 0..) |row, i| {
-        lib.printIntHex(@intCast(address_offset + i * row_width));
+        lib.printf("0x{x}", .{address_offset + i * row_width});
         tab();
         lib.put_char('|');
 
@@ -80,7 +80,7 @@ fn logBlockInfo(block_num: u16) void {
         else => lib.print("Unknown "),
     }
     lib.print("Block: ");
-    lib.printIntDec(@intCast(block_num));
+    lib.printf("{}", .{block_num});
     newline();
 }
 

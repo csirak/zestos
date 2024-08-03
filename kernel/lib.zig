@@ -65,93 +65,9 @@ pub fn printlnNullTermWrapped(ptr: [*]const u8) void {
     put_char('\n');
 }
 
-pub fn printErr(e: anyerror) void {
-    println(@errorName(e));
-}
-var buf: [20]u8 = undefined;
-
-pub fn printInt(n: u64) void {
-    printIntHex(n);
-    put_char('\n');
-}
-
-pub fn printByte(b: u8) void {
-    var out = [_]u8{0} ** 3;
-    out[0] = intToAsciiHex(@intCast((b >> 4) & 0xF));
-    out[1] = intToAsciiHex(@intCast(b & 0xF));
-    print(out[0..3]);
-}
-
-pub fn printIntDec(n: u64) void {
-    // 0 x (8 chars) \0
-    var out = [_]u8{'0'} ** 20;
-    out[19] = 0;
-
-    var cur = n;
-    var i: u8 = 1;
-    while (cur > 0) {
-        const num = cur % 10;
-        out[19 - i] = @intCast(num + 48);
-        cur /= 10;
-        i += 1;
-    }
-    const bound = 20 - i;
-
-    print(out[bound..20]);
-}
-
-pub fn printIntHex(n: u64) void {
-    // 0 x (8 chars) \0
-    var out = [_:0]u8{'0'} ** 18;
-    out[1] = 'x';
-
-    var cur = n;
-    var i: u8 = 0;
-    while (cur > 0) {
-        const num: u8 = @intCast(cur & 0xF);
-        out[17 - i] = intToAsciiHex(num);
-        cur = cur >> 4;
-        i += 1;
-    }
-
-    printNullTerm(&out);
-}
-
-pub fn intToAsciiHex(n: u8) u8 {
-    if (n < 10) {
-        return n + '0';
-    } else {
-        return n + 'a' - 10;
-    }
-}
-
-pub inline fn printAndInt(s: []const u8, n: u64) void {
-    print(s);
-    printInt(n);
-}
-
-pub fn printAndDec(s: []const u8, n: u64) void {
-    print(s);
-    printIntDec(n);
-    put_char('\n');
-}
-
-pub fn printPtr(ptr: anytype) void {
-    printInt(@intFromPtr(ptr));
-}
-
 pub fn kpanic(msg: []const u8) noreturn {
     print("kernel panic: ");
     println(msg);
-    while (true) {}
-    unreachable;
-}
-
-pub fn kpanicInt(msg: []const u8, n: u64) noreturn {
-    print("kernel panic: ");
-    print(msg);
-    print(": ");
-    printInt(n);
     while (true) {}
     unreachable;
 }
@@ -190,7 +106,7 @@ pub fn coreLog(comptime s: []const u8) void {
 
 pub fn printCpuInfo() void {
     print("cpu depth: ");
-    printByte(@intCast(Cpu.current().disabled_depth));
+    printf("0x{x}", @intCast(Cpu.current().disabled_depth));
     println("");
 }
 
