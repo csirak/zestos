@@ -20,7 +20,7 @@ export fn start() noreturn {
     riscv.w_pmpaddr0(0x3fffffffffffff);
     riscv.w_pmpcfg0(0xf);
 
-    timerinit();
+    timerInit();
 
     riscv.w_tp(riscv.r_mhartid());
 
@@ -28,7 +28,9 @@ export fn start() noreturn {
     unreachable;
 }
 
-inline fn timerinit() void {
+extern fn timervec() void;
+
+inline fn timerInit() void {
     const tid = riscv.r_mhartid();
     const clint_mtimecmp: *u64 = riscv.CLINT_MTIMECMP(tid);
     clint_mtimecmp.* = riscv.CLINT_MTIME.* + riscv.TIMER_INTERVAL;
@@ -37,4 +39,8 @@ inline fn timerinit() void {
     timer_scratch[scratchOffset + 3] = @intFromPtr(clint_mtimecmp);
     timer_scratch[scratchOffset + 4] = riscv.TIMER_INTERVAL;
     riscv.w_mscratch(@intFromPtr(&timer_scratch[scratchOffset]));
+
+    riscv.w_mtvec(@intFromPtr(&timervec));
+    riscv.w_mstatus(riscv.r_mstatus() | riscv.MSTATUS_MIE);
+    riscv.w_mie(riscv.r_mie() | riscv.MIE_MTIE);
 }
