@@ -5,3 +5,4 @@ shell clear
 winheight asm -5
 refresh
 wh asm -10
+set can-use-hw-watchpoints 0
