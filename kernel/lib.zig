@@ -1,5 +1,6 @@
 const std = @import("std");
 const riscv = @import("riscv.zig");
+const Cpu = @import("cpu.zig");
 
 comptime {
     asm (
@@ -20,12 +21,16 @@ comptime {
     );
 }
 
-extern fn put_char(c: u8) void;
+pub extern fn put_char(c: u8) void;
 
 pub fn print(s: []const u8) void {
     for (s) |c| {
         put_char(c);
     }
+}
+
+pub fn putChar(c: u8) void {
+    put_char(c);
 }
 
 pub fn println(s: []const u8) void {
@@ -54,18 +59,72 @@ pub fn printlnNullTermWrapped(ptr: [*]const u8) void {
 pub fn printErr(e: anyerror) void {
     println(@errorName(e));
 }
+var buf: [20]u8 = undefined;
 
 pub fn printInt(n: u64) void {
-    var buf: [20]u8 = undefined;
-    println(intToString(n, &buf));
+    printIntHex(n);
+    put_char('\n');
+}
+
+pub fn printByte(b: u8) void {
+    var out = [_]u8{0} ** 3;
+    out[0] = intToAsciiHex(@intCast((b >> 4) & 0xF));
+    out[1] = intToAsciiHex(@intCast(b & 0xF));
+    print(out[0..3]);
+}
+
+pub fn printIntDec(n: u64) void {
+    // 0 x (8 chars) \0
+    var out = [_]u8{'0'} ** 20;
+    out[19] = 0;
+
+    var cur = n;
+    var i: u8 = 1;
+    while (cur > 0) {
+        const num = cur % 10;
+        out[19 - i] = @intCast(num + 48);
+        cur /= 10;
+        i += 1;
+    }
+    const bound = 20 - i;
+
+    print(out[bound..20]);
+}
+
+pub fn printIntHex(n: u64) void {
+    // 0 x (8 chars) \0
+    var out = [_]u8{'0'} ** 11;
+    out[0] = '0';
+    out[1] = 'x';
+    out[10] = 0;
+
+    var cur = n;
+    var i: u8 = 1;
+    while (cur > 0) {
+        const num: u8 = @intCast(cur & 0xF);
+        out[10 - i] = intToAsciiHex(num);
+        cur = cur >> 4;
+        i += 1;
+    }
+
+    print(out[0..11]);
+}
+
+pub fn intToAsciiHex(n: u8) u8 {
+    if (n < 10) {
+        return n + 48;
+    } else {
+        return n + 87;
+    }
+}
+
+pub fn printAndInt(s: []const u8, n: u64) void {
+    print(s);
+    printInt(n);
 }
 
 pub fn printPtr(ptr: anytype) void {
     printInt(@intFromPtr(ptr));
-}
-
-pub fn intToString(int: u64, buf: []u8) []const u8 {
-    return std.fmt.bufPrint(buf, "0x{x}", .{int}) catch "";
 }
 
 pub fn kpanic(msg: []const u8) noreturn {
@@ -82,8 +141,22 @@ pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     }
 }
 
+pub fn strCopyNullTerm(dst: []u8, src: [*:0]const u8, size: u64) void {
+    for (0..size) |i| {
+        dst[i] = src[i];
+    }
+}
+
 pub fn strEq(a: [*]u8, b: [*]const u8, size: u64) bool {
-    return std.mem.eql(u8, a[0..size], b[0..size]);
+    for (0..size) |i| {
+        if (a[i] & b[i] == 0) {
+            return true;
+        }
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+    return true;
 }
 
 pub fn coreLog(comptime s: []const u8) void {
@@ -91,4 +164,10 @@ pub fn coreLog(comptime s: []const u8) void {
     const idchar = [_]u8{ @intCast(id + 48), ' ' };
     const out = "zest core: " ++ idchar ++ s;
     println(out);
+}
+
+pub fn printCpuInfo() void {
+    print("cpu depth: ");
+    printByte(@intCast(Cpu.current().disabled_depth));
+    println("");
 }
