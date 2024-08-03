@@ -31,45 +31,43 @@ pub fn doSyscall() void {
     const proc = Process.currentOrPanic();
     const syscall_num = proc.trapframe.?.a7;
 
-    if (syscall_num == SYSCALL_FORK) {
-        const pid = proc.fork() catch {
+    switch (syscall_num) {
+        SYSCALL_FORK => proc.trapframe.?.a0 = proc.fork() catch {
             lib.kpanic("Failed to fork");
-        };
-        proc.trapframe.?.a0 = pid;
+        },
+        SYSCALL_EXIT => proc.exit(@intCast(proc.trapframe.?.a0)),
         return;
     }
     if (syscall_num == SYSCALL_EXIT) {
         exitSys(proc);
         return;
+    },
+        SYSCALL_EXEC => execSys(proc),
+        SYSCALL_DUP => {
+            proc.trapframe.?.a0 = @bitCast(dupSys(proc));
+        },
+        SYSCALL_WRITE => {
+            proc.trapframe.?.a0 = @bitCast(writeSys(proc));
+        },
+        SYSCALL_OPEN => {
+            proc.trapframe.?.a0 = @bitCast(openSys(proc));
+        },
+        SYSCALL_MAKE_NODE => {
+            proc.trapframe.?.a0 = @bitCast(makedNodeSys(proc));
+        },
+        else => {
+            lib.printf("address: {}\nsyscall_num: {}\n", .{ proc.trapframe.?.epc, syscall_num });
+            lib.kpanic("Unknown syscall");
+        },
     }
-    if (syscall_num == SYSCALL_EXEC) {
-        execSys(proc);
+}
 
-        return;
-    }
-    if (syscall_num == SYSCALL_DUP) {
-        const result = dupSys(proc);
-        proc.trapframe.?.a0 = @bitCast(result);
-        return;
-    }
-    if (syscall_num == SYSCALL_WRITE) {
-        const result = writeSys(proc);
-        proc.trapframe.?.a0 = @bitCast(result);
-        return;
-    }
-    if (syscall_num == SYSCALL_OPEN) {
-        const result = openSys(proc);
-        proc.trapframe.?.a0 = @bitCast(result);
-        return;
-    }
-    if (syscall_num == SYSCALL_MAKE_NODE) {
-        const result = makedNodeSys(proc);
-        proc.trapframe.?.a0 = @bitCast(result);
-        return;
-    }
-    lib.printAndInt("address: ", proc.trapframe.?.epc);
-    lib.printAndDec("syscall_num: ", syscall_num);
-    lib.kpanic("Unknown syscall");
+fn waitSys(proc: *Process) i64 {
+    const dummy = 0;
+    const status = proc.wait(dummy) catch {
+        return -1;
+    };
+    return @intCast(status);
 }
 
 fn execSys(proc: *Process) void {
@@ -82,19 +80,6 @@ fn execSys(proc: *Process) void {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to exec /init");
     };
-}
-fn dupSys(proc: *Process) i64 {
-    const fd = proc.trapframe.?.a0;
-    const file = proc.open_files[fd].?;
-    const new_fd = proc.fileDescriptorAlloc(file) catch {
-        return -1;
-    };
-    return @intCast(new_fd);
-}
-
-fn exitSys(proc: *Process) void {
-    const status = proc.trapframe.?.a0;
-    proc.exit(@intCast(status));
 }
 
 fn openSys(proc: *Process) i64 {
@@ -197,17 +182,5 @@ fn makedNodeSys(proc: *Process) i64 {
         return -1;
     };
     INodeTable.removeRefAndRelease(inode);
-    return 0;
-}
-
-fn writeSys(proc: *Process) i64 {
-    const fd = proc.trapframe.?.a0;
-    const file = proc.open_files[fd].?;
-    const buff_user_address = proc.trapframe.?.a1;
-    const size = proc.trapframe.?.a2;
-    file.write(buff_user_address, size) catch |e| {
-        lib.printErr(e);
-        return -1;
-    };
     return 0;
 }
