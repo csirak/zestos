@@ -21,7 +21,7 @@ pub fn main() void {
 
     writeSuperBlock();
 
-    const root_inum = diskINodeAlloc(fs.INodeType.Directory);
+    const root_inum = diskINodeAlloc(fs.INODE_DIR);
 
     const dot = fs.dirEntry(root_inum, ".");
     const dotdot = fs.dirEntry(root_inum, "..");
@@ -39,6 +39,7 @@ pub fn main() void {
     root_inode.size = ((root_inode.size / fs.BLOCK_SIZE) + 1) * fs.BLOCK_SIZE;
     writeINode(root_inum, root_inode);
     bitMapAdd(free_block);
+    std.debug.print("blocks used: {d}\n", .{free_block - fs.NUM_META_BLOCKS});
 }
 
 fn writeZeros() void {
@@ -56,10 +57,12 @@ fn writeSuperBlock() void {
     writeBlock(fs.SUPER_BLOCK_INDEX, super_block_bytes ++ extension_bytes);
 }
 
-fn diskINodeAlloc(typ: fs.INodeType) u16 {
+fn diskINodeAlloc(typ: u16) u16 {
     defer free_inode += 1;
 
-    const inode = fs.DiskINode{ .type = typ, .major = 0x69 };
+    const inode = fs.DiskINode{
+        .typ = typ,
+    };
     writeINode(free_inode, inode);
 
     return free_inode;
@@ -95,6 +98,7 @@ fn iNodeAppend(inum: u16, bytes: []const u8) void {
     var buffer: fs.Block = undefined;
     var inode: fs.DiskINode = undefined;
     readINode(inum, &inode);
+    // debug.print("inode size: {d} bytes added: {d}\n", .{ inode.size, bytes.len });
 
     var file_offset = inode.size;
     var bytes_left = bytes.len;
@@ -179,7 +183,6 @@ fn writeBlock(block_num: u64, block: fs.Block) void {
 fn bitMapAdd(blocks: u64) void {
     var buffer: fs.Block = undefined;
     for (0..(blocks)) |block| {
-        debug.print("block: {d}\n", .{block});
         const block_index = block / fs.BLOCK_SIZE + fs.SUPER_BLOCK.bmap_start;
         const byte_index = block / 8;
         const bit_index = block % 8;

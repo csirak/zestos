@@ -1,6 +1,5 @@
 const fs = @import("fs.zig");
 const lib = @import("../lib.zig");
-const tools = @import("../tools/blockdump.zig");
 
 const Buffer = @import("buffer.zig");
 const BufferCache = @import("buffercache.zig");
