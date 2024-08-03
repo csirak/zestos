@@ -1,9 +1,14 @@
+pub const Page = *[PGSIZE]u8;
+
 pub const NCPU = 4;
 pub const MAX_PROCS = 64;
 pub const PGSIZE = 4096; // bytes per page
 
 pub const UART0: u64 = 0x10000000;
+pub const UART0_IRQ: u64 = 10;
+
 pub const VIRTIO0: u64 = 0x10001000;
+pub const VIRTIO0_IRQ: u64 = 1;
 
 pub const CLINT: u64 = 0x2000000;
 pub const PLIC: u64 = 0x0c000000;
@@ -87,6 +92,13 @@ pub inline fn w_sstatus(x: u64) void {
 
 pub inline fn w_mepc(x: u64) void {
     asm volatile ("csrw mepc, %[x]"
+        :
+        : [x] "r" (x),
+    );
+}
+
+pub inline fn w_sepc(x: u64) void {
+    asm volatile ("csrw sepc, %[x]"
         :
         : [x] "r" (x),
     );
@@ -219,6 +231,14 @@ pub inline fn w_satp(x: u64) void {
     );
 }
 
+pub inline fn r_satp() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], satp"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
 pub inline fn w_mscratch(x: u64) void {
     asm volatile ("csrw mscratch, %[x]"
         :
@@ -226,7 +246,7 @@ pub inline fn w_mscratch(x: u64) void {
     );
 }
 
-// Machine-mode interrupt vector
+// Machine-mode trap vector
 pub inline fn w_mtvec(x: u64) void {
     asm volatile ("csrw mtvec, %[x]"
         :
@@ -234,7 +254,13 @@ pub inline fn w_mtvec(x: u64) void {
     );
 }
 
-// Hartid and Thread Pointer
+// Supervisor-mode trap vector
+pub inline fn w_stvec(x: u64) void {
+    asm volatile ("csrw stvec, %[x]"
+        :
+        : [x] "r" (x),
+    );
+}
 
 pub inline fn r_mhartid() u64 {
     var x: u64 = 0;

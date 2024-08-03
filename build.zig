@@ -39,6 +39,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const switch_context = b.addObject(.{
+        .name = "switch_context",
+        .root_source_file = b.path("kernel/asm/switch_context.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const trampoline = b.addObject(.{
         .name = "trampoline",
         .root_source_file = b.path("kernel/asm/trampoline.zig"),
@@ -63,7 +70,7 @@ pub fn build(b: *std.Build) void {
     kernel.addObject(trampoline);
 
     kernel.addObject(kernelvec);
-    kernel.addObject(trap);
+    kernel.addObject(switch_context);
 
     b.installArtifact(kernel);
 

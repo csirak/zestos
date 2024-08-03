@@ -3,9 +3,13 @@ const lib = @import("lib.zig");
 const Procedure = @import("procs/proc.zig");
 
 const Self = @This();
+
+var cpus: [riscv.NCPU]Self = undefined;
+
 interrupts_enabled: bool,
 disabled_depth: u16,
-var cpus: [riscv.NCPU]Self = undefined;
+proc: ?*Procedure,
+call_context: Procedure.SysCallContext,
 
 pub fn pushInterrupt(self: *Self) void {
     const old = riscv.intr_get();
