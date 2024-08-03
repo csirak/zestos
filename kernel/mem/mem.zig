@@ -22,4 +22,4 @@ pub const PTE_V = (1 << 0);
 pub const PTE_R = (1 << 1);
 pub const PTE_W = (1 << 2);
 pub const PTE_X = (1 << 3);
-pub const PTE_U = (1 << 4);
+pub const PTE_U: u8 = (1 << 4);

@@ -13,6 +13,11 @@ const PageTable = @import("../mem/pagetable.zig");
 
 const StdOut = @import("../io/stdout.zig");
 
+const fs = @import("../fs/fs.zig");
+const File = @import("../fs/file.zig");
+const INodeTable = @import("../fs/inodetable.zig");
+const INode = @import("../fs/inode.zig");
+
 const Self = @This();
 
 const ProcState = enum { Unused, Used, Sleeping, Runnable, Running, Zombie };
@@ -79,6 +84,7 @@ pub const SysCallContext = extern struct {
     s11: u64,
 };
 
+pub const NAME_SIZE = 20;
 const init_code = [_]u8{
     0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
     0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x35, 0x02,
@@ -114,10 +120,11 @@ parent: *Self,
 kstackPtr: u64,
 mem_size: u64,
 pagetable: ?PageTable,
-
+cwd: *INode,
+open_files: [fs.MAX_OPEN_FILES]?*File,
 trapframe: ?*TrapFrame,
 call_context: SysCallContext,
-name: [20]u8,
+name: [NAME_SIZE]u8,
 
 pub fn init() void {
     proc_glob_lock = Spinlock.init("proc_glob_lock");
@@ -139,9 +146,8 @@ pub fn alloc() !*Self {
         if (p.state == .Unused) {
             proc = p;
             break;
-        } else {
-            p.lock.release();
         }
+        p.lock.release();
     }
     if (proc == undefined) {
         return error.ProcNotAvailable;
@@ -149,6 +155,7 @@ pub fn alloc() !*Self {
 
     proc.pid = allocPid();
     proc.state = .Used;
+    proc.trapframe = @ptrCast(try KMem.alloc());
 
     proc.initPageTable() catch |e| {
         proc.free() catch unreachable;
@@ -184,6 +191,13 @@ pub fn isKilled(self: *Self) bool {
     return killed;
 }
 
+pub fn getPid(self: *Self) u64 {
+    self.lock.acquire();
+    const pid = self.pid;
+    self.lock.release();
+    return pid;
+}
+
 pub fn setKilled(self: *Self) void {
     self.lock.acquire();
     self.killed = true;
@@ -208,6 +222,10 @@ pub fn fork(self: *Self) !void {
 
     newProc.mem_size = self.mem_size;
     newProc.trapframe.?.* = self.trapframe.?.*;
+    newProc.trapframe.?.a0 = 0;
+
+    newProc.cwd = try INodeTable.duplicate(self.cwd);
+
     lib.strCopy(newProc.name[0..], self.name[0..], 20);
     const pid = newProc.pid;
 
@@ -224,6 +242,24 @@ pub fn fork(self: *Self) !void {
     return pid;
 }
 
+// atomically lock process and release external lock
+// process will be scheduled to run again when awakened
+// reacquire lock
+pub fn sleep(self: *Self, channel: *anyopaque, passed_lock: *Spinlock) void {
+    self.lock.acquire();
+    passed_lock.release();
+
+    self.channel = @intFromPtr(channel);
+    self.state = .Sleeping;
+
+    self.switchToScheduler();
+
+    self.channel = 0;
+
+    self.lock.release();
+    passed_lock.acquire();
+}
+
 pub fn exit(self: *Self, status: i64) void {
     if (self == init_proc) {
         lib.kpanic("init process exit");
@@ -238,13 +274,35 @@ pub fn exit(self: *Self, status: i64) void {
     proc_glob_lock.release();
 }
 
+pub fn initPageTable(self: *Self) !void {
+    self.pagetable = try getTrapFrameMappedPageTable(self);
+}
+
+pub fn getTrapFrameMappedPageTable(self: *Self) !PageTable {
+    var new_pagetable = try PageTable.init();
+
+    try new_pagetable.mapPages(
+        riscv.TRAMPOLINE,
+        @intFromPtr(&trampoline),
+        riscv.PGSIZE,
+        mem.PTE_R | mem.PTE_X,
+    );
+
+    try new_pagetable.mapPages(
+        riscv.TRAPFRAME,
+        @intFromPtr(self.trapframe.?),
+        riscv.PGSIZE,
+        mem.PTE_R | mem.PTE_W,
+    );
+    return new_pagetable;
+}
+
 pub fn userInit() !void {
     const proc = try alloc();
     init_proc = proc;
 
     // allocate code memory
-    const page: riscv.Page = @ptrCast(try KMem.alloc());
-    @memset(page, 0);
+    const page: riscv.Page = @ptrCast(try KMem.allocZeroed());
     try proc.pagetable.?.mapPages(
         0,
         @intFromPtr(page),
@@ -258,6 +316,7 @@ pub fn userInit() !void {
     proc.state = .Runnable;
 
     lib.strCopy(proc.name[0..], "init", 4);
+    proc.cwd = try INodeTable.namedInode("/");
     proc.lock.release();
 }
 
@@ -280,6 +339,12 @@ pub fn scheduler() void {
     }
 }
 
+pub fn copyToUser(dest: u64, src: *[]u8, size: u64) !void {
+    try currentOrPanic().pagetable.?.copyInto(dest, src, size);
+}
+
+/// not a struct function because for now it's used by the scheduler because
+/// the current process doesn't need any information on the process to wake up
 pub fn wakeup(channel: *anyopaque) void {
     const cur = current();
     for (&PROCS) |*proc| {
@@ -332,23 +397,4 @@ fn switchToScheduler(self: *Self) void {
     // swap and restore when done
     switch_context(&self.call_context, &cpu.call_context);
     cpu.interrupts_enabled = interrupts_enabled;
-}
-
-fn initPageTable(self: *Self) !void {
-    self.trapframe = @ptrCast(try KMem.alloc());
-    self.pagetable = try PageTable.init();
-
-    try self.pagetable.?.mapPages(
-        riscv.TRAMPOLINE,
-        @intFromPtr(&trampoline),
-        riscv.PGSIZE,
-        mem.PTE_R | mem.PTE_X,
-    );
-
-    try self.pagetable.?.mapPages(
-        riscv.TRAPFRAME,
-        @intFromPtr(self.trapframe),
-        riscv.PGSIZE,
-        mem.PTE_R | mem.PTE_W,
-    );
 }
