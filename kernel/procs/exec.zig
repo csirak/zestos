@@ -15,7 +15,7 @@ pub fn exec(path: [*:0]u8) !void {
     Log.beginTx();
     defer Log.endTx();
 
-    const inode = try INodeTable.namedInode(path);
+    const inode = try INodeTable.getNamedInode(path);
     inode.lock();
     defer inode.release();
 
