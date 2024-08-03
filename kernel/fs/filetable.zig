@@ -3,6 +3,8 @@ const lib = @import("../lib.zig");
 
 const Spinlock = @import("../locks/spinlock.zig");
 const File = @import("file.zig");
+const Log = @import("log.zig");
+const INodeTable = @import("inodetable.zig");
 
 var lock: Spinlock = undefined;
 var files: [fs.NUM_FILES]File = undefined;
@@ -23,4 +25,31 @@ pub fn alloc() *File {
     }
 
     @panic("buffer cache is full");
+}
+
+pub fn free(file: *File) void {
+    var file_data = file.*;
+    // so we release lock before io
+    {
+        lock.acquire();
+        defer lock.release();
+        file.reference_count = switch (file.reference_count) {
+            1 => 0,
+            0 => @panic("file closed"),
+            else => @panic("file stil has reference"),
+        };
+        file.data = .none;
+    }
+
+    switch (file_data.data) {
+        .pipe => {},
+        .inode_file, .device => {
+            Log.beginTx();
+            defer Log.endTx();
+            INodeTable.removeRef(file_data.getInode());
+        },
+        else => {
+            @panic("invalid file data");
+        },
+    }
 }

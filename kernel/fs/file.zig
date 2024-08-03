@@ -1,11 +1,12 @@
 const INode = @import("inode.zig");
 const Pipe = @import("pipe.zig").Pipe;
 const Device = @import("../device.zig");
+const INodeTable = @import("inode.zig");
 const lib = @import("../lib.zig");
 
 const Self = @This();
 
-pub const FileType = enum(u16) { pipe = 1, inode_file, device };
+pub const FileType = enum(u16) { none, pipe, inode_file, device };
 
 pub const FileInfo = struct {
     inode: *INode,
@@ -18,6 +19,7 @@ pub const DevInfo = struct {
 };
 
 pub const FileData = union(FileType) {
+    none: void,
     pipe: *Pipe,
     inode_file: FileInfo,
     device: DevInfo,
@@ -37,7 +39,16 @@ pub fn write(self: *Self, buffer_ptr: u64, size: u64) !void {
         .device => |device| {
             try Device.getDevice(device.major).?.write(buffer_ptr, size);
         },
+        else => @panic("invalid file type"),
     }
+}
+
+pub fn getInode(self: *Self) *INode {
+    return switch (self.data) {
+        .inode_file => |info| info.inode,
+        .device => |info| info.inode,
+        else => @panic("invalid file type"),
+    };
 }
 
 reference_count: u16,

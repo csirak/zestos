@@ -14,9 +14,11 @@ const PageTable = @import("../mem/pagetable.zig");
 const StdOut = @import("../io/stdout.zig");
 
 const fs = @import("../fs/fs.zig");
+const Log = @import("../fs/log.zig");
 const File = @import("../fs/file.zig");
-const INodeTable = @import("../fs/inodetable.zig");
+const FileTable = @import("../fs/filetable.zig");
 const INode = @import("../fs/inode.zig");
+const INodeTable = @import("../fs/inodetable.zig");
 
 const Self = @This();
 
@@ -98,7 +100,6 @@ const init_code = [_]u8{
 var PROCS: [riscv.MAX_PROCS]Self = undefined;
 
 var proc_glob_lock: Spinlock = undefined;
-
 var pid_lock: Spinlock = undefined;
 
 var init_proc: *Self = undefined;
@@ -140,6 +141,7 @@ pub fn init() void {
     }
 }
 
+/// Returns with lock held
 pub fn alloc() !*Self {
     var proc: *Self = undefined;
     var i: usize = 0;
@@ -190,22 +192,20 @@ pub fn free(self: *Self) !void {
 
 pub fn isKilled(self: *Self) bool {
     self.lock.acquire();
-    const killed = self.killed;
-    self.lock.release();
-    return killed;
+    defer self.lock.release();
+    return self.killed;
 }
 
 pub fn getPid(self: *Self) u64 {
     self.lock.acquire();
-    const pid = self.pid;
-    self.lock.release();
-    return pid;
+    defer self.lock.release();
+    return self.pid;
 }
 
 pub fn setKilled(self: *Self) void {
     self.lock.acquire();
+    defer self.lock.release();
     self.killed = true;
-    self.lock.release();
 }
 
 pub fn fileDescriptorAlloc(self: *Self, file: *File) !u64 {
@@ -220,10 +220,10 @@ pub fn fileDescriptorAlloc(self: *Self, file: *File) !u64 {
 
 pub fn yield(self: *Self) void {
     self.lock.acquire();
+    defer self.lock.release();
     self.state = .Runnable;
     // closes lock and then returns with lock held.
     self.switchToScheduler();
-    self.lock.release();
 }
 
 pub fn fork(self: *Self) !u64 {
@@ -259,6 +259,9 @@ pub fn fork(self: *Self) !u64 {
 // atomically lock process and release external lock
 // process will be scheduled to run again when awakened
 // reacquire lock
+
+/// atomically lock process and release external lockprocess will be scheduled to run again when awakened
+/// reacquire lock
 pub fn sleep(self: *Self, channel: *anyopaque, passed_lock: *Spinlock) void {
     self.lock.acquire();
     passed_lock.release();
@@ -279,16 +282,39 @@ pub fn exit(self: *Self, status: i64) void {
         lib.kpanic("init process exit");
     }
 
+    for (&self.open_files) |*file| if (file.*) |f| {
+        FileTable.free(f);
+        file.* = null;
+    };
+
+    Log.beginTx();
+    INodeTable.removeRef(self.cwd);
+    Log.endTx();
+    self.cwd = undefined;
+
     proc_glob_lock.acquire();
+    self.reparent();
     wakeup(self.parent);
 
+    // sched requires lock to be held
     self.lock.acquire();
     self.exit_status = status;
     self.state = .Zombie;
+
+    // cant defer because sched actually exits to diff proc
     proc_glob_lock.release();
 
     self.switchToScheduler();
     lib.kpanic("ZOMBIE WALKING");
+}
+
+pub fn reparent(self: *Self) void {
+    for (&PROCS) |*proc| {
+        if (proc.parent == self) {
+            proc.parent = init_proc;
+            wakeup(init_proc);
+        }
+    }
 }
 
 pub fn initPageTable(self: *Self) !void {
