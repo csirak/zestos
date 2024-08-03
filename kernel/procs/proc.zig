@@ -134,6 +134,10 @@ pub fn init() void {
         PROCS[i].lock = Spinlock.init("proc");
         PROCS[i].state = .Unused;
         PROCS[i].kstackPtr = riscv.KSTACK(i) + riscv.KSTACK_SIZE;
+
+        for (0..fs.MAX_OPEN_FILES) |j| {
+            PROCS[i].open_files[j] = null;
+        }
     }
 }
 
@@ -203,6 +207,15 @@ pub fn setKilled(self: *Self) void {
     self.killed = true;
     self.lock.release();
 }
+pub fn fileDescriptorAlloc(self: *Self, file: *File) !u64 {
+    for (0..fs.MAX_OPEN_FILES) |i| {
+        if (self.open_files[i] == null) {
+            self.open_files[i] = file;
+            return i;
+        }
+    }
+    return error.NoFileDescriptorAvailable;
+}
 
 pub fn yield(self: *Self) void {
     self.lock.acquire();
@@ -224,7 +237,7 @@ pub fn fork(self: *Self) !void {
     newProc.trapframe.?.* = self.trapframe.?.*;
     newProc.trapframe.?.a0 = 0;
 
-    newProc.cwd = try INodeTable.duplicate(self.cwd);
+    newProc.cwd = INodeTable.duplicate(self.cwd);
 
     lib.strCopy(newProc.name[0..], self.name[0..], 20);
     const pid = newProc.pid;
@@ -315,6 +328,7 @@ pub fn userInit() !void {
     proc.trapframe.?.epc = 0;
     proc.state = .Runnable;
 
+    proc.cwd = try INodeTable.getNamedInode("/");
     lib.strCopy(proc.name[0..], "init", 4);
     proc.cwd = try INodeTable.namedInode("/");
     proc.lock.release();

@@ -1,4 +1,7 @@
 const Sleeplock = @import("../locks/sleeplock.zig");
+const BufferCache = @import("buffercache.zig");
+const lib = @import("../lib.zig");
+const Log = @import("log.zig");
 const INode = @import("inode.zig");
 
 pub const DiskINode = extern struct {
@@ -77,6 +80,8 @@ pub const SUPER_BLOCK: SuperBlock = .{
     .bmap_start = BOOT_AND_SUPER_BLOCK_OFFSET + NUM_LOG_BLOCKS + NUM_INODE_BLOCKS,
 };
 
+pub var loaded_super_block: SuperBlock = undefined;
+
 pub inline fn inodeBlockNum(inum: u16) u16 {
     return @intCast((@divFloor(inum, INODES_PER_BLOCK)) + SUPER_BLOCK.inode_start);
 }
@@ -100,4 +105,18 @@ fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     for (0..len) |i| {
         dst[i] = src[i];
     }
+}
+
+pub fn init() void {
+    const sb_buffer = BufferCache.read(ROOT_DEVICE, SUPER_BLOCK_NUM);
+    defer BufferCache.release(sb_buffer);
+    const super_block: *SuperBlock = @ptrCast(@alignCast(&sb_buffer.data));
+    if (super_block.magic != MAGIC) {
+        lib.kpanic("Invalid superblock");
+    }
+    Log.init(ROOT_DEVICE, super_block) catch |e| {
+        lib.printErr(e);
+        lib.kpanic("Failed to initialize log");
+    };
+    loaded_super_block = super_block.*;
 }

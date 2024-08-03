@@ -56,24 +56,37 @@ pub fn alloc(device: u16, block_num: u16) *Buffer {
 }
 
 /// returns with sleeplock
-pub fn read(dev: u16, block_num: u16) *Buffer {
-    const buffer = alloc(dev, block_num);
+pub fn read(device: u16, block_num: u16) *Buffer {
+    const buffer = alloc(device, block_num);
     if (!buffer.valid) {
         Virtio.readTo(buffer);
         buffer.valid = true;
     }
+
     return buffer;
 }
 
-pub fn zeroBlock(dev: u16, block_num: u16) void {
-    const buffer = read(dev, block_num);
+pub fn free(device: u16, block_num: u16) void {
+    const bitmap_buffer = BufferCache.read(device, fs.bitMapBlockNum(block_num));
+    defer BufferCache.release(bitmap_buffer);
+    const mask = @as(u8, 1) << @intCast(block_num % 8);
+    const byte_ptr = &bitmap_buffer.data[@divFloor(block_num, 8)];
+    if (byte_ptr.* & mask == 0) {
+        lib.kpanic("block already free");
+    }
+    byte_ptr.* &= ~mask;
+    Log.write(bitmap_buffer);
+}
+
+pub fn zeroBlock(device: u16, block_num: u16) void {
+    const buffer = read(device, block_num);
     defer release(buffer);
     @memset(&buffer.data, 0);
     write(buffer);
 }
 
-pub fn readFromCache(dev: u16, block_num: u16) *Buffer {
-    const buffer = alloc(dev, block_num);
+pub fn readFromCache(device: u16, block_num: u16) *Buffer {
+    const buffer = alloc(device, block_num);
     if (!buffer.valid) {
         lib.kpanic("readFromCache: block not in cache");
     }
@@ -123,14 +136,14 @@ pub fn removeRef(buffer: *Buffer) void {
 
 pub fn allocDiskBlock(device: u16) u16 {
     var bitmap_block: u16 = 0;
-    while (bitmap_block < fs.SUPER_BLOCK.size) : (bitmap_block += fs.BITS_PER_BLOCK) {
+    while (bitmap_block < fs.loaded_super_block.size) : (bitmap_block += fs.BITS_PER_BLOCK) {
         const bitmap_buffer = BufferCache.read(device, fs.bitMapBlockNum(bitmap_block));
         defer BufferCache.release(bitmap_buffer);
         for (0..fs.BITS_PER_BLOCK) |bi| {
             const block_index: u16 = @intCast(bi);
             const block_num = bitmap_block + block_index;
             const mask = @as(u8, 1) << @intCast(block_num % 8);
-            const byte_ptr = &bitmap_buffer.data[block_index / 8];
+            const byte_ptr = &bitmap_buffer.data[@divFloor(block_index, 8)];
 
             if (byte_ptr.* & mask == 0) {
                 byte_ptr.* |= mask;

@@ -1,8 +1,11 @@
 const lib = @import("lib.zig");
 const riscv = @import("riscv.zig");
-const Process = @import("procs/proc.zig");
+const Device = @import("device.zig");
 const Traps = @import("trap.zig");
+
+const Process = @import("procs/proc.zig");
 const KMem = @import("mem/kmem.zig");
+
 const Plic = @import("io/plic.zig");
 const StdOut = @import("io/stdout.zig");
 
@@ -33,6 +36,8 @@ pub export fn main() void {
         FileTable.init();
         INodeTable.init();
         Virtio.init();
+        Device.init();
+        StdOut.init();
 
         Process.userInit() catch |e| {
             lib.println("error initializing user process");
