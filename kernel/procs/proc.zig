@@ -12,7 +12,7 @@ const StdOut = @import("../io/stdout.zig");
 
 const Self = @This();
 
-const ProcState = enum { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+const ProcState = enum { Unused, Used, Sleeping, Runnable, Running, Zombie };
 
 extern fn trampoline() void;
 
@@ -100,7 +100,7 @@ lock: Spinlock,
 // spin lock must be held
 state: ProcState,
 killed: bool,
-exit_status: u64,
+exit_status: i64,
 pid: u64,
 
 // must have global lock
@@ -121,7 +121,7 @@ pub fn init() void {
 
     for (0..riscv.MAX_PROCS) |i| {
         PROCS[i].lock = Spinlock.init("proc");
-        PROCS[i].state = .UNUSED;
+        PROCS[i].state = .Unused;
         PROCS[i].kstackPtr = riscv.KSTACK(i);
     }
 }
@@ -132,7 +132,7 @@ pub fn alloc() !*Self {
     while (i < riscv.MAX_PROCS) : (i += 1) {
         var p = &PROCS[i];
         p.lock.acquire();
-        if (p.state == .UNUSED) {
+        if (p.state == .Unused) {
             proc = p;
             break;
         } else {
@@ -144,10 +144,10 @@ pub fn alloc() !*Self {
     }
 
     proc.pid = allocPid();
-    proc.state = .USED;
+    proc.state = .Used;
 
     proc.initPageTable() catch |e| {
-        try proc.free();
+        proc.free() catch unreachable;
         proc.lock.release();
         return e;
     };
@@ -170,7 +170,7 @@ pub fn free(self: *Self) !void {
     self.name[0] = 0;
     self.killed = false;
     self.exit_status = 0;
-    self.state = .UNUSED;
+    self.state = .Unused;
 }
 
 pub fn userInit() !void {
@@ -190,7 +190,7 @@ pub fn userInit() !void {
 
     proc.mem_size = riscv.PGSIZE;
     proc.trapframe.?.epc = 0;
-    proc.state = .RUNNABLE;
+    proc.state = .Runnable;
 
     lib.strCopy(proc.name[0..], "init", 4);
     proc.lock.release();
@@ -204,8 +204,8 @@ pub fn scheduler() void {
         riscv.intr_on();
         for (&PROCS) |*proc| {
             proc.lock.acquire();
-            if (proc.state == .RUNNABLE) {
-                proc.*.state = .RUNNING;
+            if (proc.state == .Runnable) {
+                proc.state = .Running;
                 cpu.proc = proc;
                 switch_context(&cpu.call_context, &proc.call_context);
                 cpu.proc = null;
