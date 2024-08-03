@@ -136,6 +136,18 @@ pub inline fn w_pmpaddr0(x: u64) void {
     );
 }
 
+pub inline fn fence() void {
+    asm volatile ("fence");
+}
+
+pub inline fn fence_iorw() void {
+    asm volatile ("fence iorw, iorw");
+}
+
+pub fn cpuid() u64 {
+    return r_tp();
+}
+
 pub inline fn r_tp() u64 {
     var x: u64 = 0;
     asm volatile ("mv %[x], tp"
