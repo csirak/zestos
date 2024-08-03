@@ -1,0 +1,25 @@
+const riscv = @import("../riscv.zig");
+
+inline fn plicSupervisorEnableAddr(coreId: u64) *u32 {
+    return @ptrFromInt(riscv.PLIC + 0x2080 + (coreId) * 0x100);
+}
+inline fn plicSupervisorPriorityAddr(coreId: u64) *u32 {
+    return @ptrFromInt(riscv.PLIC + 0x201000 + (coreId) * 0x2000);
+}
+
+pub fn init() void {
+    const uart_irq_addr: *u32 = @ptrFromInt(riscv.PLIC + riscv.UART0_IRQ * 4);
+    const virtio_irq_addr: *u32 = @ptrFromInt(riscv.PLIC + riscv.VIRTIO0_IRQ * 4);
+
+    uart_irq_addr.* = 1;
+    virtio_irq_addr.* = 1;
+}
+
+pub fn coreInit() void {
+    const coreId = riscv.cpuid();
+    const enableValue = (riscv.UART0_IRQ << 1) | (riscv.VIRTIO0_IRQ << 1);
+    const priorityValue = 0;
+
+    plicSupervisorEnableAddr(coreId).* = enableValue;
+    plicSupervisorPriorityAddr(coreId).* = priorityValue;
+}

@@ -3,6 +3,7 @@ const riscv = @import("riscv.zig");
 const Procedure = @import("procs/proc.zig");
 const Traps = @import("trap.zig");
 const KMem = @import("mem/kmem.zig");
+const Plic = @import("io/plic.zig");
 const StdOut = @import("io/stdout.zig");
 
 var started: bool = false;
@@ -19,6 +20,10 @@ pub export fn main() void {
 
         Traps.init();
         Traps.coreInit();
+
+        Plic.init();
+        Plic.coreInit();
+
         Procedure.userInit() catch |e| {
             lib.println("error initializing user process");
             lib.printErr(e);
@@ -34,6 +39,7 @@ pub export fn main() void {
 
         KMem.coreInit();
         Traps.coreInit();
+        Plic.coreInit();
 
         StdOut.coreLog("started!");
     }
