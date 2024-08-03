@@ -1,5 +1,6 @@
 const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
+const Procedure = @import("procs/proc.zig");
 
 const Self = @This();
 interrupts_enabled: bool,

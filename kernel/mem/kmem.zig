@@ -3,8 +3,8 @@ const PageTable = @import("PageTable.zig");
 
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
-const Procedure = @import("../proc.zig");
 
+const Procedure = @import("../procs/proc.zig");
 const Spinlock = @import("../locks/spinlock.zig");
 
 const run = struct {
