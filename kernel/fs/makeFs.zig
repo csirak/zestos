@@ -6,9 +6,17 @@ const fs = @import("fs.zig");
 var free_inode: u16 = 1;
 var free_block: u32 = fs.NUM_META_BLOCKS;
 var disk: std.fs.File = undefined;
+var glob_log: bool = false;
 
-pub fn main() void {
-    debug.print("nmeta: {d} (boot, super, log blocks: {d} inode blocks: {d}, bitmap blocks: {d})\ndata blocks: {d}\ntotal: {d}\n\n", .{ fs.NUM_META_BLOCKS, fs.NUM_LOG_BLOCKS, fs.NUM_INODE_BLOCKS, fs.NUM_BITMAP_BLOCKS, fs.NUM_DATA_BLOCKS, fs.TOTAL_BLOCKS });
+fn debugPrint(comptime fmt: []const u8, args: anytype) void {
+    if (glob_log) {
+        debug.print(fmt, args);
+    }
+}
+
+pub fn makeFs(log: bool) void {
+    glob_log = log;
+    debugPrint("nmeta: {d} (boot, super, log blocks: {d} inode blocks: {d}, bitmap blocks: {d})\ndata blocks: {d}\ntotal: {d}\n\n", .{ fs.NUM_META_BLOCKS, fs.NUM_LOG_BLOCKS, fs.NUM_INODE_BLOCKS, fs.NUM_BITMAP_BLOCKS, fs.NUM_DATA_BLOCKS, fs.TOTAL_BLOCKS });
 
     const file_name = "fs.img";
 
@@ -29,14 +37,16 @@ pub fn main() void {
     iNodeAppend(root_inum, std.mem.asBytes(&dot));
     iNodeAppend(root_inum, std.mem.asBytes(&dotdot));
 
-    addUserProgram();
+    addUserProgram("user/_init", "init");
+    addUserProgram("user/_sh", "sh");
+
     var root_inode: fs.DiskINode = undefined;
     readINode(root_inum, &root_inode);
 
     root_inode.size = (@divFloor(root_inode.size, fs.BLOCK_SIZE) + 1) * fs.BLOCK_SIZE;
     writeINode(root_inum, root_inode);
     bitMapAdd(free_block);
-    std.debug.print("blocks used: {d}\n", .{free_block - fs.NUM_META_BLOCKS});
+    debugPrint("blocks used: {d}\n", .{free_block - fs.NUM_META_BLOCKS});
 }
 
 fn writeZeros() void {
@@ -189,14 +199,13 @@ fn bitMapAdd(blocks: u64) void {
     }
 }
 
-fn addUserProgram() void {
-    const local_path = "user/_init";
-    debug.print("adding user program\n", .{});
+fn addUserProgram(path: []const u8, name: []const u8) void {
+    debugPrint("adding user program {s}\n", .{name});
     const inode = diskINodeAlloc(fs.INODE_FILE);
-    const dir_entry = fs.dirEntry(inode, "init");
+    const dir_entry = fs.dirEntry(inode, name);
     iNodeAppend(fs.ROOT_INODE, std.mem.asBytes(&dir_entry));
 
-    const program_file = std.fs.cwd().openFile(local_path, .{}) catch |err| {
+    const program_file = std.fs.cwd().openFile(path, .{}) catch |err| {
         debug.panic("Failed to create disk: {s}", .{@errorName(err)});
     };
 
@@ -211,5 +220,5 @@ fn addUserProgram() void {
         };
         iNodeAppend(inode, &buffer);
     }
-    std.debug.print("bytes_read: {d}\n", .{bytes_read});
+    debugPrint("bytes_read: {d}\n", .{bytes_read});
 }

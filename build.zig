@@ -1,4 +1,5 @@
 const std = @import("std");
+const fs = @import("kernel/fs/makeFs.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{
@@ -57,6 +58,8 @@ pub fn build(b: *std.Build) void {
     kernel.addObject(switch_context);
 
     b.installArtifact(kernel);
+
+    fs.makeFs(false);
 
     const run_cmd_str = [_][]const u8{
         "qemu-system-riscv64",
