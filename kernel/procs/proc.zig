@@ -102,6 +102,7 @@ state: ProcState,
 killed: bool,
 exit_status: i64,
 pid: u64,
+channel: u64,
 
 // must have global lock
 parent: *Self,
@@ -153,7 +154,7 @@ pub fn alloc() !*Self {
     };
 
     proc.call_context = std.mem.zeroes(SysCallContext);
-    proc.call_context.ra = @intFromPtr(&forkret);
+    proc.call_context.ra = @intFromPtr(&Trap.forkReturn);
     proc.call_context.sp = proc.kstackPtr + riscv.PGSIZE;
     return proc;
 }
@@ -171,6 +172,41 @@ pub fn free(self: *Self) !void {
     self.killed = false;
     self.exit_status = 0;
     self.state = .Unused;
+}
+
+pub fn isKilled(self: *Self) bool {
+    self.lock.acquire();
+    const killed = self.killed;
+    self.lock.release();
+    return killed;
+}
+
+pub fn setKilled(self: *Self) void {
+    self.lock.acquire();
+    self.killed = true;
+    self.lock.release();
+}
+
+pub fn yield(self: *Self) void {
+    self.lock.acquire();
+    self.state = .Runnable;
+    // closes lock and then returns with lock held.
+    self.switchToScheduler();
+    self.lock.release();
+}
+
+pub fn exit(self: *Self, status: i64) void {
+    if (self == init_proc) {
+        lib.kpanic("init process exit");
+    }
+
+    proc_glob_lock.acquire();
+    wakeup(@intFromPtr(self.parent));
+
+    self.lock.acquire();
+    self.exit_status = status;
+    self.state = .Zombie;
+    proc_glob_lock.release();
 }
 
 pub fn userInit() !void {
@@ -215,6 +251,58 @@ pub fn scheduler() void {
     }
 }
 
+pub fn wakeup(channel: u64) void {
+    const cur = current();
+    for (&PROCS) |*proc| {
+        if (proc != cur and proc.channel == channel) {
+            proc.lock.acquire();
+            proc.state = .Runnable;
+            proc.lock.release();
+        }
+    }
+}
+
+pub fn current() ?*Self {
+    const cpu = Cpu.current();
+    var proc: ?*Self = undefined;
+    cpu.pushInterrupt();
+    proc = cpu.proc;
+    cpu.popInterrupt();
+    return proc;
+}
+
+fn allocPid() u64 {
+    pid_lock.acquire();
+    const out = nextpid;
+    nextpid += 1;
+    pid_lock.release();
+    return out;
+}
+
+// proc lock is released in scheduler
+fn switchToScheduler(self: *Self) void {
+    if (!self.lock.haveLock()) {
+        lib.kpanic("proc lock not held on scheduler switch");
+    }
+
+    var cpu = Cpu.current();
+
+    if (cpu.disabled_depth != 1) {
+        lib.kpanic("scheduler switch while interrupt stack not aligned");
+    }
+    if (self.state == .Running) {
+        lib.kpanic("scheduler switch while already running");
+    }
+    if (riscv.intr_get()) {
+        lib.kpanic("scheduler switch while interrupts enabled");
+    }
+
+    const interrupts_enabled = cpu.interrupts_enabled;
+    // swap and restore when done
+    switch_context(&self.call_context, &cpu.call_context);
+    cpu.interrupts_enabled = interrupts_enabled;
+}
+
 fn initPageTable(self: *Self) !void {
     self.trapframe = @ptrCast(try KMem.alloc());
     self.pagetable = try PageTable.init();
@@ -232,29 +320,4 @@ fn initPageTable(self: *Self) !void {
         riscv.PGSIZE,
         mem.PTE_R | mem.PTE_W,
     );
-}
-
-pub fn current() *Self {
-    const cpu = Cpu.current();
-    var proc: *Self = undefined;
-    cpu.pushInterrupt();
-    proc = cpu.proc.?;
-    cpu.popInterrupt();
-    return proc;
-}
-
-fn allocPid() u64 {
-    pid_lock.acquire();
-    const out = nextpid;
-    nextpid += 1;
-    pid_lock.release();
-    return out;
-}
-
-export fn forkret() void {
-    // make sure to boot fs when running
-    const proc = current();
-    proc.lock.release();
-
-    Trap.userTrapReturn();
 }

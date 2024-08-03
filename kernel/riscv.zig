@@ -60,6 +60,13 @@ pub const SSTATUS_UPIE: u64 = 1 << 4; // User Previous Interrupt Enable
 pub const SSTATUS_SIE: u64 = 1 << 1; // Supervisor Interrupt Enable
 pub const SSTATUS_UIE: u64 = 1 << 0; // User Interrupt Enable
 
+pub const SCAUSE_TYPE_MASK: u64 = 1 << 63; // Interrupt
+pub const SCAUSE_FLAG_MASK: u64 = 0xFF; // Status
+
+pub const SCAUSE_INT_SOFTWARE: u64 = 1;
+pub const SCAUSE_TRAP_SYSCALL: u64 = 8;
+pub const SCAUSE_INT_PLIC: u64 = 9;
+
 pub inline fn r_mstatus() u64 {
     var x: u64 = 0;
     asm volatile ("csrr %[x], mstatus"
@@ -102,6 +109,14 @@ pub inline fn w_sepc(x: u64) void {
         :
         : [x] "r" (x),
     );
+}
+
+pub inline fn r_sepc() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], sepc"
+        : [x] "=r" (x),
+    );
+    return x;
 }
 
 pub inline fn mret() void {
@@ -166,6 +181,22 @@ pub inline fn w_sie(x: u64) void {
         :
         : [x] "r" (x),
     );
+}
+
+pub inline fn r_scause() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], scause"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
+pub inline fn r_stval() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], stval"
+        : [x] "=r" (x),
+    );
+    return x;
 }
 
 // Supervisor device interrupts
