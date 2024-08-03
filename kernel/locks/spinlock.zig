@@ -1,6 +1,7 @@
 const Cpu = @import("../cpu.zig");
 const lib = @import("../lib.zig");
 const riscv = @import("../riscv.zig");
+const builtin = @import("std").builtin;
 
 const Self = @This();
 
@@ -20,26 +21,25 @@ pub fn acquire(self: *Self) void {
     var c = Cpu.current();
     c.pushInterrupt();
     if (self.haveLock()) {
+        lib.print(self.name);
         lib.kpanic("Spinlock already locked");
     }
 
-    var v = riscv.atomic_swap(&self.locked, 1);
-    while (v != 0) {
-        v = riscv.atomic_swap(&self.locked, 1);
-    }
+    while (@atomicRmw(bool, &self.locked, .Xchg, true, .acquire)) {}
+    @fence(.seq_cst);
 
-    riscv.fence();
     self.cpu = c;
 }
 
 pub fn release(self: *Self) void {
     if (!self.haveLock()) {
+        lib.print(self.name);
         lib.kpanic("Spinlock not held");
     }
     self.cpu = null;
     riscv.fence();
 
-    riscv.atomic_write_zero(&self.locked);
+    @atomicStore(bool, &self.locked, false, .release);
     Cpu.current().popInterrupt();
 }
 

@@ -16,9 +16,9 @@ pub export fn main() void {
         KMem.init();
 
         started = true;
-        riscv.fence_iorw();
+        @fence(.seq_cst);
     } else {
         while (!started) {}
-        riscv.fence_iorw();
-    }
+        @fence(.seq_cst);
+
 }
