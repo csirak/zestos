@@ -14,6 +14,7 @@ pub export fn main() void {
         lib.println("zest-os booting");
 
         KMem.init();
+        KMem.coreInit();
 
         started = true;
         @fence(.seq_cst);
@@ -21,4 +22,5 @@ pub export fn main() void {
         while (!started) {}
         @fence(.seq_cst);
 
+        KMem.coreInit();
 }

@@ -20,3 +20,9 @@ pub fn printInt(i: u64) void {
     lib.printInt(i);
     lock.release();
 }
+
+pub fn coreLog(comptime s: []const u8) void {
+    lock.acquire();
+    lib.coreLog(s);
+    lock.release();
+}
