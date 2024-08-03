@@ -319,3 +319,16 @@ pub inline fn w_tp(x: u64) void {
         : [x] "r" (x),
     );
 }
+
+pub inline fn plic_claim() u32 {
+    const core_id = cpuid();
+    return plicSClaimRegister(core_id).*;
+}
+pub inline fn plic_complete(irq: u32) void {
+    const core_id = cpuid();
+    plicSClaimRegister(core_id).* = irq;
+}
+
+inline fn plicSClaimRegister(hart: u64) *volatile u32 {
+    return @ptrFromInt(PLIC + 0x201004 + (hart) * 0x2000);
+}
