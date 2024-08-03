@@ -5,9 +5,12 @@ const lib = @import("../lib.zig");
 
 const Cpu = @import("../cpu.zig");
 const Trap = @import("../trap.zig");
-const KMem = @import("../mem/kmem.zig");
+
 const Spinlock = @import("../locks/spinlock.zig");
+
+const KMem = @import("../mem/kmem.zig");
 const PageTable = @import("../mem/pagetable.zig");
+
 const StdOut = @import("../io/stdout.zig");
 
 const Self = @This();
@@ -227,7 +230,7 @@ pub fn exit(self: *Self, status: i64) void {
     }
 
     proc_glob_lock.acquire();
-    wakeup(@intFromPtr(self.parent));
+    wakeup(self.parent);
 
     self.lock.acquire();
     self.exit_status = status;
@@ -277,10 +280,10 @@ pub fn scheduler() void {
     }
 }
 
-pub fn wakeup(channel: u64) void {
+pub fn wakeup(channel: *anyopaque) void {
     const cur = current();
     for (&PROCS) |*proc| {
-        if (proc != cur and proc.channel == channel) {
+        if (proc != cur and proc.channel == @intFromPtr(channel)) {
             proc.lock.acquire();
             proc.state = .Runnable;
             proc.lock.release();
@@ -290,19 +293,21 @@ pub fn wakeup(channel: u64) void {
 
 pub fn current() ?*Self {
     const cpu = Cpu.current();
-    var proc: ?*Self = undefined;
     cpu.pushInterrupt();
-    proc = cpu.proc;
-    cpu.popInterrupt();
+    defer cpu.popInterrupt();
+    return cpu.proc;
+}
+
+pub fn currentOrPanic() *Self {
+    const proc = current() orelse lib.kpanic("No current process");
     return proc;
 }
 
-fn allocPid() u64 {
+pub fn allocPid() u64 {
     pid_lock.acquire();
-    const out = nextpid;
-    nextpid += 1;
-    pid_lock.release();
-    return out;
+    defer pid_lock.release();
+    defer nextpid += 1;
+    return nextpid;
 }
 
 // proc lock is released in scheduler
