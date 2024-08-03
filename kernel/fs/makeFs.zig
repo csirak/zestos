@@ -29,10 +29,7 @@ pub fn main() void {
     iNodeAppend(root_inum, std.mem.asBytes(&dot));
     iNodeAppend(root_inum, std.mem.asBytes(&dotdot));
 
-    // while (args.next()) |arg| {
-    //     addUserProgram(arg);
-    // }
-
+    addUserProgram();
     var root_inode: fs.DiskINode = undefined;
     readINode(root_inum, &root_inode);
 
@@ -190,4 +187,29 @@ fn bitMapAdd(blocks: u64) void {
         buffer[byte_index] |= @as(u8, 1) << @intCast(bit_index);
         writeBlock(block_index, buffer);
     }
+}
+
+fn addUserProgram() void {
+    const local_path = "user/_init";
+    debug.print("adding user program\n", .{});
+    const inode = diskINodeAlloc(.File);
+    const dir_entry = fs.dirEntry(inode, "init");
+    iNodeAppend(fs.ROOT_INODE, std.mem.asBytes(&dir_entry));
+
+    const program_file = std.fs.cwd().openFile(local_path, .{}) catch |err| {
+        debug.panic("Failed to create disk: {s}", .{@errorName(err)});
+    };
+
+    var buffer: [1024]u8 = undefined;
+    const size = program_file.getEndPos() catch |err| {
+        debug.panic("Failed to get program file size: {s}", .{@errorName(err)});
+    };
+    var bytes_read: u64 = 0;
+    while (bytes_read < size) {
+        bytes_read += program_file.readAll(&buffer) catch |err| {
+            debug.panic("Failed to read program file: {s}", .{@errorName(err)});
+        };
+        iNodeAppend(inode, &buffer);
+    }
+    std.debug.print("bytes_read: {d}\n", .{bytes_read});
 }
