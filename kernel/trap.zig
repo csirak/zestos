@@ -2,13 +2,17 @@ const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
 const fs = @import("fs/fs.zig");
 
+const KMem = @import("mem/kmem.zig");
+const PageTable = @import("mem/pagetable.zig");
+const mem = @import("mem/mem.zig");
+
 const Spinlock = @import("locks/spinlock.zig");
 const StdOut = @import("io/stdout.zig");
 const Process = @import("procs/proc.zig");
 const Syscalls = @import("procs/syscall.zig");
 const Virtio = @import("fs/virtio.zig");
 
-const Interrupt = enum { Timer, Software, External, Syscall, Unknown };
+const Interrupt = enum { Timer, Software, External, Syscall, Breakpoint, Unknown };
 
 var ticks: u64 = 0;
 var tickslock: Spinlock = undefined;
@@ -18,7 +22,6 @@ extern fn kernelvec() void;
 extern fn uservec() void;
 extern fn userret() void;
 extern fn trampoline() void;
-
 pub fn init() void {
     tickslock = Spinlock.init("time");
 }
@@ -29,7 +32,7 @@ pub fn coreInit() void {
 
 pub fn userTrap() void {
     if (riscv.r_sstatus() & riscv.SSTATUS_SPP != 0) {
-        lib.kpanic("user trap not from user mode");
+        StdOut.kpanic("user trap not from user mode");
     }
 
     riscv.w_stvec(@intFromPtr(&kernelvec));
@@ -37,9 +40,8 @@ pub fn userTrap() void {
     const proc = Process.currentOrPanic();
 
     proc.trapframe.?.epc = riscv.r_sepc();
-
-    const reason = getSupervisorInterrupt();
-
+    const scause = riscv.r_scause();
+    const reason = getSupervisorInterrupt(scause);
     switch (reason) {
         .Syscall => {
             if (proc.isKilled()) {
@@ -58,24 +60,26 @@ pub fn userTrap() void {
         },
 
         .External => {
-            lib.println("external");
+            StdOut.println("external");
         },
 
         else => {
-            lib.kpanic("Unknown interrupt");
             proc.setKilled();
+            StdOut.kpanic("Unknown interrupt");
         },
     }
 
     if (proc.isKilled()) {
+        StdOut.println("killed");
         proc.exit(-1);
     }
 
     userTrapReturn();
 }
 
-pub fn userTrapReturn() void {
+pub fn userTrapReturn() noreturn {
     var proc = Process.currentOrPanic();
+
     // deactivate until in user mode
     riscv.intr_off();
 
@@ -96,13 +100,11 @@ pub fn userTrapReturn() void {
     const satp = proc.pagetable.?.getAsSatp();
 
     const user_ret_trampoline = riscv.TRAMPOLINE + @intFromPtr(&userret) - @intFromPtr(&trampoline);
-
-    const user_ret: *const fn (u64) void = @ptrFromInt(user_ret_trampoline);
+    const user_ret: *const fn (u64) noreturn = @ptrFromInt(user_ret_trampoline);
     user_ret(satp);
 }
 
 pub fn forkReturn() void {
-    // make sure to boot fs when running
     const proc = Process.currentOrPanic();
     proc.lock.release();
 
@@ -116,26 +118,34 @@ pub fn forkReturn() void {
 
 export fn kerneltrap() void {
     const sepc = riscv.r_sepc();
-    // const scause = riscv.r_scause();
+    const scause = riscv.r_scause();
+
     const sstatus = riscv.r_sstatus();
     const current = Process.current();
 
     if (sstatus & riscv.SSTATUS_SPP == 0) {
-        lib.kpanic("Not from Supervisor Mode");
+        StdOut.kpanic("Not from Supervisor Mode");
     }
 
     if (riscv.intr_get()) {
-        lib.kpanic("Interrupts on");
+        StdOut.kpanic("Interrupts on");
     }
 
-    const cause = getSupervisorInterrupt();
+    const reason = getSupervisorInterrupt(scause);
 
-    if (cause == .Unknown) {
-        lib.kpanic("Unknown interrupt");
+    if (reason == .Unknown) {
+        lib.println("");
+        StdOut.printAndInt("stack: ", riscv.r_sp());
+        StdOut.printAndInt("stval: ", riscv.r_stval());
+        StdOut.printAndInt("sepc: ", riscv.r_sepc());
+        StdOut.printAndInt("ra: ", riscv.r_ra());
+        StdOut.printAndInt("a0: ", riscv.r_a0());
+        StdOut.printAndInt("cause: ", scause);
+        StdOut.kpanic("Unknown interrupt");
     }
 
     if (current) |proc| {
-        if (proc.state == .Running and cause == .Timer) {
+        if (proc.state == .Running and reason == .Timer) {
             proc.yield();
         }
     }
@@ -145,16 +155,12 @@ export fn kerneltrap() void {
 }
 
 // must be called in kernel mode with stvec set to kernelvec
-fn getSupervisorInterrupt() Interrupt {
-    const cause = riscv.r_scause();
-
+fn getSupervisorInterrupt(cause: u64) Interrupt {
     if (cause == riscv.SCAUSE_TRAP_SYSCALL) {
         return .Syscall;
     }
 
     if (cause & riscv.SCAUSE_TYPE_MASK == 0) {
-        lib.println("unknown trap");
-        lib.printInt(cause);
         return .Unknown;
     }
 
@@ -164,12 +170,7 @@ fn getSupervisorInterrupt() Interrupt {
     const flag = cause & riscv.SCAUSE_FLAG_MASK;
     switch (flag) {
         riscv.SCAUSE_INT_SOFTWARE => {
-            if (riscv.cpuid() == 0) {
-                tickslock.acquire();
-                ticks += 1;
-                Process.wakeup(&ticks);
-                tickslock.release();
-            }
+            clockInterrupt();
             return .Timer;
         },
         riscv.SCAUSE_INT_PLIC => {
@@ -177,8 +178,8 @@ fn getSupervisorInterrupt() Interrupt {
             return .External;
         },
         else => {
-            lib.print("unknown fault: ");
-            lib.printInt(flag);
+            StdOut.print("unknown fault: ");
+            StdOut.printInt(flag);
             return .Unknown;
         },
     }
@@ -188,17 +189,30 @@ fn plicInterrupt() void {
     const interrupt_id = riscv.plic_claim();
 
     switch (interrupt_id) {
+        0 => {
+            return;
+        },
         riscv.VIRTIO0_IRQ => {
             Virtio.diskInterrupt();
         },
         else => {
-            lib.println("plic interrupt");
-            lib.printInt(interrupt_id);
-            lib.kpanic("Unknown PLIC interrupt");
+            StdOut.println("plic interrupt");
+            StdOut.printInt(interrupt_id);
         },
     }
 
     if (interrupt_id != 0) {
         riscv.plic_complete(interrupt_id);
     }
+}
+
+inline fn clockInterrupt() void {
+    if (riscv.cpuid() != 0) {
+        return;
+    }
+
+    tickslock.acquire();
+    defer tickslock.release();
+    ticks += 1;
+    Process.wakeup(&ticks);
 }
