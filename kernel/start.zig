@@ -2,6 +2,7 @@ const main = @import("main.zig").main;
 const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
 const std = @import("std");
+const Process = @import("procs/proc.zig");
 
 export var timer_scratch = [_]u64{0} ** (riscv.NCPU * 5);
 
@@ -46,8 +47,11 @@ inline fn timerInit() void {
 }
 
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    const ra = @returnAddress();
+    const proc = Process.current();
     lib.println("\nKERNEL PANIC: ");
-    lib.printf("pid: 0x{x}\n", .{p.getPid()});
+    if (proc) |p| {
+        lib.printf("pid: 0x{x}\n", .{p.getPid()});
     }
     lib.printf("stack: 0x{x}\n", .{riscv.r_sp()});
     lib.printf("stval: 0x{x}\n", .{riscv.r_stval()});
