@@ -44,6 +44,12 @@ pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
         lib.printf("error: {}\n", .{e});
         return error.NoFreeInodesOnDisk;
     };
+    errdefer {
+        create_inode.reference_count = 0;
+        update(create_inode);
+        removeRefAndRelease(create_inode);
+        removeRefAndRelease(parent);
+    }
 
     create_inode.lock();
 
@@ -53,18 +59,20 @@ pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
     update(create_inode);
 
     if (typ == fs.INODE_DIR) {
-        dirLink(create_inode, @constCast(@ptrCast(DOT)), create_inode.inum);
-        dirLink(create_inode, @constCast(@ptrCast(DOTDOT)), parent.inum);
+        try dirLink(create_inode, @constCast(@ptrCast(DOT)), create_inode.inum);
+        try dirLink(create_inode, @constCast(@ptrCast(DOTDOT)), parent.inum);
     }
 
-    dirLink(parent, @ptrCast(&name), create_inode.inum);
+    try dirLink(parent, @ptrCast(&name), create_inode.inum);
 
     if (typ == fs.INODE_DIR) {
         // for the .. ref
         parent.disk_inode.num_links += 1;
+        update(parent);
     }
 
-    parent.release();
+    removeRefAndRelease(parent);
+
     return create_inode;
 }
 
@@ -236,7 +244,7 @@ fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
     return null;
 }
 
-pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) void {
+pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) !void {
     const check_exists = dirLookUp(dir, @ptrCast(name), null);
     if (check_exists) |_| {
         return;
@@ -244,10 +252,12 @@ pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) void {
     var offset: u32 = 0;
     var entry: fs.DirEntry = undefined;
     while (offset < dir.disk_inode.size) : (offset += @sizeOf(fs.DirEntry)) {
-        const read = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
-            lib.printf("error: {}\n", .{e});
-            return;
-        };
+        const read = try dir.readToAddress(
+            @intFromPtr(&entry),
+            offset,
+            @sizeOf(fs.DirEntry),
+            false,
+        );
         if (read != @sizeOf(fs.DirEntry)) {
             lib.kpanic("DIDNT READ DIR");
         }
@@ -257,7 +267,10 @@ pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) void {
     }
     lib.strCopyNullTerm(&entry.name, @ptrCast(name), fs.DIR_NAME_SIZE);
     entry.inum = inum;
-    _ = dir.writeTo(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
-        lib.printf("error: {}\n", .{e});
-    };
+    _ = try dir.writeTo(
+        @intFromPtr(&entry),
+        offset,
+        @sizeOf(fs.DirEntry),
+        false,
+    );
 }

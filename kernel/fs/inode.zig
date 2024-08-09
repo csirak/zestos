@@ -17,6 +17,14 @@ sleeplock: Sleeplock,
 valid: bool,
 disk_inode: fs.DiskINode,
 
+pub const Stat = extern struct {
+    device: i32,
+    inum: u32,
+    typ: u16,
+    reference_count: u16,
+    size: u64,
+};
+
 pub fn lock(self: *Self) void {
     if (self.reference_count < 1) {
         lib.kpanic("INode lock failed");
@@ -100,10 +108,10 @@ pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, use
         defer BufferCache.release(block_buffer);
         const bytes_to_write: u32 = @intCast(@min(size - bytes_read, fs.BLOCK_SIZE - (file_offset % fs.BLOCK_SIZE)));
         const bytes_offset = file_offset % fs.BLOCK_SIZE;
-        var src = block_buffer.data[bytes_offset..];
+        var src: [*]u8 = @ptrCast(&block_buffer.data[bytes_offset]);
         if (user_space) {
             var user_pagetable = Process.currentOrPanic().pagetable.?;
-            try user_pagetable.copyInto(cur_dest, &src, bytes_to_write);
+            try user_pagetable.copyInto(cur_dest, src, bytes_to_write);
         } else {
             const dest_ptr: *[fs.BLOCK_SIZE]u8 = @ptrFromInt(cur_dest);
             @memcpy(dest_ptr[0..bytes_to_write], src[0..bytes_to_write]);
@@ -130,17 +138,19 @@ pub fn writeTo(self: *Self, src: u64, offset: u32, size: u64, user_space: bool) 
     while (block_offset < size + offset) {
         const block_num: u16 = @intCast(@divFloor(block_offset, fs.BLOCK_SIZE));
         const block_addr = self.mapBlock(block_num);
-        const block_buffer = BufferCache.read(self.device, @intCast(block_addr));
+        var block_buffer = BufferCache.read(self.device, @intCast(block_addr));
         defer BufferCache.release(block_buffer);
         const bytes_left = size - (block_offset - offset);
-        const bytes_left_in_block = fs.BLOCK_SIZE - (block_offset % fs.BLOCK_SIZE);
+        const block_offset_in_block = block_offset % fs.BLOCK_SIZE;
+        const bytes_left_in_block = fs.BLOCK_SIZE - block_offset_in_block;
         const bytes_to_write = @min(bytes_left, bytes_left_in_block);
 
         if (user_space) {
             // var user_pagetable = Process.currentOrPanic().pagetable.?;
             // try user_pagetable.copyInto(cur_dest, &src, bytes_to_write);
+            @panic("invalid bytes");
         } else {
-            const dest_ptr: *[fs.BLOCK_SIZE]u8 = @ptrCast(@alignCast(&block_buffer.data));
+            var dest_ptr: *[fs.BLOCK_SIZE]u8 = @ptrCast(@alignCast(&block_buffer.data[block_offset_in_block]));
             const src_bytes: [*]u8 = @ptrFromInt(src);
             @memcpy(dest_ptr[0..bytes_to_write], src_bytes[0..bytes_to_write]);
         }
@@ -180,4 +190,12 @@ pub fn truncate(self: *Self) void {
 
     self.disk_inode.size = 0;
     INodeTable.update(self);
+}
+
+pub fn getStat(self: *Self, stat: *Stat) void {
+    stat.device = @intCast(self.device);
+    stat.inum = @intCast(self.inum);
+    stat.typ = self.disk_inode.typ;
+    stat.reference_count = self.reference_count;
+    stat.size = @intCast(self.disk_inode.size);
 }

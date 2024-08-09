@@ -15,6 +15,7 @@ pub const SYSCALL_EXIT = 2;
 pub const SYSCALL_WAIT = 3;
 pub const SYSCALL_READ = 5;
 pub const SYSCALL_EXEC = 7;
+pub const SYSCALL_STAT = 8;
 pub const SYSCALL_DUP = 10;
 pub const SYSCALL_SBRK = 12;
 pub const SYSCALL_OPEN = 15;
@@ -47,6 +48,9 @@ pub fn doSyscall() void {
         },
         SYSCALL_EXEC => {
             proc.trapframe.?.a0 = execSys(proc);
+        },
+        SYSCALL_STAT => {
+            proc.trapframe.?.a0 = @bitCast(statSys(proc));
         },
         SYSCALL_DUP => {
             proc.trapframe.?.a0 = @bitCast(dupSys(proc));
@@ -173,6 +177,15 @@ fn dupSys(proc: *Process) i64 {
         return -1;
     };
     return @intCast(new_fd);
+}
+
+fn statSys(proc: *Process) i64 {
+    const file_descriptor = proc.trapframe.?.a0;
+    const address = proc.trapframe.?.a1;
+    if (proc.open_files[file_descriptor]) |file| {
+        return file.getStat(address) catch -1;
+    }
+    return -1;
 }
 fn sbrkSys(proc: *Process) i64 {
     const size: i64 = @bitCast(proc.trapframe.?.a0);

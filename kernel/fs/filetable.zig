@@ -33,11 +33,16 @@ pub fn free(file: *File) void {
     {
         lock.acquire();
         defer lock.release();
-        file.reference_count = switch (file.reference_count) {
-            1 => 0,
+        switch (file.reference_count) {
+            1 => {
+                file.reference_count = 0;
+            },
             0 => @panic("file closed"),
-            else => @panic("file stil has reference"),
-        };
+            else => {
+                file.reference_count = file.reference_count - 1;
+                return;
+            },
+        }
         file.data = .none;
     }
 
@@ -52,4 +57,14 @@ pub fn free(file: *File) void {
             @panic("invalid file data");
         },
     }
+}
+
+pub fn duplicate(file: *File) *File {
+    lock.acquire();
+    defer lock.release();
+    if (file.reference_count < 1) {
+        @panic("filedup doesnt exist");
+    }
+    file.reference_count += 1;
+    return file;
 }

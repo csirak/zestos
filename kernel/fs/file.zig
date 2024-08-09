@@ -3,6 +3,7 @@ const Pipe = @import("pipe.zig").Pipe;
 const Device = @import("../device.zig");
 const INodeTable = @import("inode.zig");
 const lib = @import("../lib.zig");
+const Process = @import("../procs/proc.zig");
 
 const Self = @This();
 
@@ -73,6 +74,21 @@ pub fn getInode(self: *Self) *INode {
         .device => |info| info.inode,
         else => @panic("invalid file type"),
     };
+}
+
+pub fn getStat(self: *Self, addr: u64) !i64 {
+    const proc = Process.currentOrPanic();
+    var stat: INode.Stat = undefined;
+    switch (self.data) {
+        .inode_file, .device => {},
+        else => @panic("invalid file type"),
+    }
+    const inode = self.getInode();
+    inode.lock();
+    defer inode.release();
+    inode.getStat(&stat);
+    try proc.pagetable.?.copyInto(addr, @ptrCast(&stat), @sizeOf(INode.Stat));
+    return 0;
 }
 
 reference_count: u16,
