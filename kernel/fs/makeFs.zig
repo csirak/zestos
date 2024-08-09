@@ -37,9 +37,12 @@ pub fn makeFs(log: bool) void {
     iNodeAppend(root_inum, std.mem.asBytes(&dot));
     iNodeAppend(root_inum, std.mem.asBytes(&dotdot));
 
-    addUserProgram("user/_init", "init");
-    addUserProgram("user/_sh", "sh");
-    addUserProgram("user/_ls", "ls");
+    // addUserProgram("user/_init", "init");
+    // addUserProgram("user/_sh", "sh");
+    // addUserProgram("user/_ls", "ls");
+    addUserPrograms("user", std.heap.page_allocator) catch |err| {
+        debug.panic("Failed to add user programs: {s}", .{@errorName(err)});
+    };
 
     var root_inode: fs.DiskINode = undefined;
     readINode(root_inum, &root_inode);
@@ -221,6 +224,24 @@ fn addUserProgram(path: []const u8, name: []const u8) void {
         iNodeAppend(inode, &buffer);
     }
     debugPrint("bytes_read: {d}\n", .{bytes_read});
+}
+
+fn addUserPrograms(path: []const u8, allocator: std.mem.Allocator) !void {
+    const dir = try std.fs.cwd().openDir(path, .{});
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        const name = entry.name;
+        const paths = [_][]const u8{ path, name };
+        const full_path = try std.fs.path.join(allocator, &paths);
+        if (entry.kind == .file) {
+            if (name[0] != '_') {
+                continue;
+            }
+            // user programs start with _
+            addUserProgram(full_path, name[1..]);
+            std.debug.print("added user program {s}\n", .{name[1..]});
+        }
+    }
 }
 
 pub fn main() void {

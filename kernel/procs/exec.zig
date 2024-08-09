@@ -11,7 +11,7 @@ const Pagetable = @import("../mem/pagetable.zig");
 const Log = @import("../fs/log.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 
-pub fn exec(path: [*:0]u8) !u64 {
+pub fn exec(path: [*:0]u8) !i64 {
     Log.beginTx();
     defer Log.endTx();
 

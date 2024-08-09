@@ -47,7 +47,7 @@ pub fn doSyscall() void {
             proc.trapframe.?.a0 = @bitCast(readSys(proc));
         },
         SYSCALL_EXEC => {
-            proc.trapframe.?.a0 = execSys(proc);
+            proc.trapframe.?.a0 = @bitCast(execSys(proc));
         },
         SYSCALL_STAT => {
             proc.trapframe.?.a0 = @bitCast(statSys(proc));
@@ -94,15 +94,15 @@ fn readSys(proc: *Process) i64 {
     };
 }
 
-fn execSys(proc: *Process) u64 {
+fn execSys(proc: *Process) i64 {
     const path_user_address = proc.trapframe.?.a0;
     proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.exec_path_buff), MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
     return exec(@ptrCast(&Static.exec_path_buff)) catch |e| {
-        lib.printf("error: {}\n", .{e});
-        lib.kpanic("Failed to exec /init");
+        lib.printf("Failed to exec error: {}\n", .{e});
+        return -1;
     };
 }
 
