@@ -1,50 +1,25 @@
 const std = @import("std");
 const riscv = @import("riscv.zig");
 const Cpu = @import("cpu.zig");
+const Uart = @import("io/Uart.zig");
 
 var print_buffer = [_]u8{0} ** 4096;
 var print_fba = std.heap.FixedBufferAllocator.init(&print_buffer);
 const print_allocator = print_fba.allocator();
 
-comptime {
-    asm (
-        \\.globl putchar_asm
-        \\putchar_asm:
-        \\.equ     UART_REG_TXFIFO, 0
-        \\.equ     UART_BASE, 0x10000000
-        \\li       t0, UART_BASE           # load UART base address
-        \\
-        \\.Lput_char_loop:
-        \\lw       t1, UART_REG_TXFIFO(t0) # read UART TX FIFO status
-        \\li       t2, 0x80000000
-        \\and      t1, t1, t2
-        \\bnez     t1, .Lput_char_loop      # if TX FIFO is full, wait
-        \\
-        \\sw       a0, UART_REG_TXFIFO(t0) # write character to TX FIFO
-        \\ret
-    );
-}
-extern fn putchar_asm(c: u8) void;
-
-pub fn put_char(c: u8) void {
-    Cpu.current().pushInterrupt();
-    putchar_asm(c);
-    Cpu.current().popInterrupt();
-}
-
 pub fn print(s: []const u8) void {
     for (s) |c| {
-        put_char(c);
+        Uart.putc(c);
     }
 }
 
 pub fn putChar(c: u8) void {
-    put_char(c);
+    Uart.putc(c);
 }
 
 pub fn println(s: []const u8) void {
     print(s);
-    put_char('\n');
+    Uart.putc('\n');
 }
 
 pub fn printNullTerm(ptr: [*]const u8) void {
@@ -55,14 +30,14 @@ pub fn printNullTerm(ptr: [*]const u8) void {
 
 pub fn printlnNullTerm(ptr: [*]const u8) void {
     printNullTerm(ptr);
-    put_char('\n');
+    Uart.putc('\n');
 }
 
 pub fn printlnNullTermWrapped(ptr: [*]const u8) void {
-    put_char('{');
+    Uart.putc('{');
     printNullTerm(ptr);
-    put_char('}');
-    put_char('\n');
+    Uart.putc('}');
+    Uart.putc('\n');
 }
 
 pub fn kpanic(msg: []const u8) noreturn {

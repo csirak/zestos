@@ -13,11 +13,14 @@ const exec = @import("exec.zig").exec;
 pub const SYSCALL_FORK = 1;
 pub const SYSCALL_EXIT = 2;
 pub const SYSCALL_WAIT = 3;
+pub const SYSCALL_READ = 5;
 pub const SYSCALL_EXEC = 7;
 pub const SYSCALL_DUP = 10;
+pub const SYSCALL_SBRK = 12;
 pub const SYSCALL_OPEN = 15;
 pub const SYSCALL_WRITE = 16;
 pub const SYSCALL_MAKE_NODE = 17;
+pub const SYSCALL_CLOSE = 21;
 
 const MAX_PATH = 128;
 
@@ -39,9 +42,17 @@ pub fn doSyscall() void {
         SYSCALL_WAIT => {
             proc.trapframe.?.a0 = @bitCast(waitSys(proc));
         },
-        SYSCALL_EXEC => execSys(proc),
+        SYSCALL_READ => {
+            proc.trapframe.?.a0 = @bitCast(readSys(proc));
+        },
+        SYSCALL_EXEC => {
+            proc.trapframe.?.a0 = execSys(proc);
+        },
         SYSCALL_DUP => {
             proc.trapframe.?.a0 = @bitCast(dupSys(proc));
+        },
+        SYSCALL_SBRK => {
+            proc.trapframe.?.a0 = @bitCast(sbrkSys(proc));
         },
         SYSCALL_WRITE => {
             proc.trapframe.?.a0 = @bitCast(writeSys(proc));
@@ -52,8 +63,9 @@ pub fn doSyscall() void {
         SYSCALL_MAKE_NODE => {
             proc.trapframe.?.a0 = @bitCast(makedNodeSys(proc));
         },
+        SYSCALL_CLOSE => closeSys(proc),
         else => {
-            lib.printf("address: {}\nsyscall_num: {}\n", .{ proc.trapframe.?.epc, syscall_num });
+            lib.printf("address: 0x{x}\nsyscall_num: {}\n", .{ proc.trapframe.?.epc, syscall_num });
             lib.kpanic("Unknown syscall");
         },
     }
@@ -67,13 +79,24 @@ fn waitSys(proc: *Process) i64 {
     return @intCast(status);
 }
 
-fn execSys(proc: *Process) void {
+fn readSys(proc: *Process) i64 {
+    const fd = proc.trapframe.?.a0;
+    const buffer_user_address = proc.trapframe.?.a1;
+    const size = proc.trapframe.?.a2;
+    const file = proc.open_files[fd].?;
+    return file.read(buffer_user_address, size) catch |e| {
+        lib.printf("error: {}\n", .{e});
+        return -1;
+    };
+}
+
+fn execSys(proc: *Process) u64 {
     const path_user_address = proc.trapframe.?.a0;
     proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.exec_path_buff), MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
-    exec(@ptrCast(&Static.exec_path_buff)) catch |e| {
+    return exec(@ptrCast(&Static.exec_path_buff)) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to exec /init");
     };
@@ -151,17 +174,26 @@ fn dupSys(proc: *Process) i64 {
     };
     return @intCast(new_fd);
 }
+fn sbrkSys(proc: *Process) i64 {
+    const size: i64 = @bitCast(proc.trapframe.?.a0);
+    const old_brk = proc.mem_size;
+    proc.resizeMem(size) catch |e| {
+        lib.printf("error: {}\n", .{e});
+        return -1;
+    };
+    return @intCast(old_brk);
+}
 
 fn writeSys(proc: *Process) i64 {
     const fd = proc.trapframe.?.a0;
     const file = proc.open_files[fd].?;
     const buff_user_address = proc.trapframe.?.a1;
+
     const size = proc.trapframe.?.a2;
-    file.write(buff_user_address, size) catch |e| {
+    return file.write(buff_user_address, size) catch |e| {
         lib.printf("error: {}\n", .{e});
         return -1;
     };
-    return 0;
 }
 
 fn makedNodeSys(proc: *Process) i64 {
@@ -180,4 +212,12 @@ fn makedNodeSys(proc: *Process) i64 {
     };
     INodeTable.removeRefAndRelease(inode);
     return 0;
+}
+
+fn closeSys(proc: *Process) void {
+    const fd = proc.trapframe.?.a0;
+    if (proc.open_files[fd]) |file| {
+        FileTable.free(file);
+    }
+    proc.open_files[fd] = null;
 }

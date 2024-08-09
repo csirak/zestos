@@ -11,7 +11,7 @@ const Spinlock = @import("../locks/spinlock.zig");
 const KMem = @import("../mem/kmem.zig");
 const PageTable = @import("../mem/pagetable.zig");
 
-const StdOut = @import("../io/stdout.zig");
+const Console = @import("../io/console.zig");
 
 const fs = @import("../fs/fs.zig");
 const Log = @import("../fs/log.zig");
@@ -154,6 +154,7 @@ pub fn alloc() !*Self {
         }
         p.lock.release();
     }
+    errdefer proc.lock.release();
     if (proc == undefined) {
         return error.ProcNotAvailable;
     }
@@ -161,12 +162,8 @@ pub fn alloc() !*Self {
     proc.pid = allocPid();
     proc.state = .Used;
     proc.trapframe = @ptrCast(try KMem.alloc());
-
-    proc.initPageTable() catch |e| {
-        proc.free() catch unreachable;
-        proc.lock.release();
-        return e;
-    };
+    errdefer proc.free() catch unreachable;
+    try proc.initPageTable();
 
     proc.call_context = std.mem.zeroes(SysCallContext);
     proc.call_context.ra = @intFromPtr(&Trap.forkReturn);
@@ -238,6 +235,10 @@ pub fn fork(self: *Self) !u64 {
     newProc.trapframe.?.* = self.trapframe.?.*;
     newProc.trapframe.?.a0 = 0;
 
+    for (0..fs.MAX_OPEN_FILES) |i| if (self.open_files[i]) |file| {
+        newProc.open_files[i] = FileTable.duplicate(file);
+    };
+
     newProc.cwd = INodeTable.duplicate(self.cwd);
 
     lib.strCopy(newProc.name[0..], self.name[0..], 20);
@@ -281,6 +282,25 @@ pub fn wait(self: *Self, _: u64) !u64 {
         }
 
         self.sleep(self, &proc_glob_lock);
+    }
+}
+
+pub fn resizeMem(self: *Self, change: i64) !void {
+    const old_size = self.mem_size;
+    const new_size: u64 = @intCast(@as(i64, @intCast(old_size)) + change);
+
+    // TODO: check if change is valid
+    if (change > 0) {
+        self.mem_size = try self.pagetable.?.userAlloc(
+            old_size,
+            new_size,
+            mem.PTE_W,
+        );
+    } else {
+        self.mem_size = try self.pagetable.?.userDeAlloc(
+            self.mem_size,
+            new_size,
+        );
     }
 }
 

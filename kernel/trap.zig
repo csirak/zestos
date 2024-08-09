@@ -7,10 +7,12 @@ const PageTable = @import("mem/pagetable.zig");
 const mem = @import("mem/mem.zig");
 
 const Spinlock = @import("locks/spinlock.zig");
-const StdOut = @import("io/stdout.zig");
 const Process = @import("procs/proc.zig");
 const Syscalls = @import("procs/syscall.zig");
 const Virtio = @import("fs/virtio.zig");
+
+const Console = @import("io/console.zig");
+const UART = @import("io/uart.zig");
 
 const Interrupt = enum { Timer, Software, External, Syscall, Breakpoint, Unknown };
 
@@ -32,7 +34,7 @@ pub fn coreInit() void {
 
 pub fn userTrap() void {
     if (riscv.r_sstatus() & riscv.SSTATUS_SPP != 0) {
-        StdOut.kpanic("user trap not from user mode");
+        Console.kpanic("user trap not from user mode");
     }
 
     riscv.w_stvec(@intFromPtr(&kernelvec));
@@ -58,9 +60,7 @@ pub fn userTrap() void {
             proc.yield();
         },
 
-        .External => {
-            StdOut.println("external");
-        },
+        .External => {},
 
         else => {
             proc.setKilled();
@@ -69,7 +69,7 @@ pub fn userTrap() void {
     }
 
     if (proc.isKilled()) {
-        StdOut.println("killed");
+        Console.println("killed");
         proc.exit(-1);
     }
 
@@ -123,24 +123,24 @@ export fn kerneltrap() void {
     const current = Process.current();
 
     if (sstatus & riscv.SSTATUS_SPP == 0) {
-        StdOut.kpanic("Not from Supervisor Mode");
+        Console.kpanic("Not from Supervisor Mode");
     }
 
     if (riscv.intr_get()) {
-        StdOut.kpanic("Interrupts on");
+        Console.kpanic("Interrupts on");
     }
 
     const reason = getSupervisorInterrupt(scause);
 
     if (reason == .Unknown) {
         lib.println("");
-        StdOut.printf("stack: {}\n", .{riscv.r_sp()});
-        StdOut.printf("stval: {}\n", .{riscv.r_stval()});
-        StdOut.printf("sepc: {}\n", .{riscv.r_sepc()});
-        StdOut.printf("ra: {}\n", .{riscv.r_ra()});
-        StdOut.printf("a0: {}\n", .{riscv.r_a0()});
-        StdOut.printf("cause: {}\n", .{scause});
-        StdOut.kpanic("Unknown interrupt");
+        Console.printf("stack: {x}\n", .{riscv.r_sp()});
+        Console.printf("stval: {x}\n", .{riscv.r_stval()});
+        Console.printf("sepc: {x}\n", .{riscv.r_sepc()});
+        Console.printf("ra: {x}\n", .{riscv.r_ra()});
+        Console.printf("a0: {x}\n", .{riscv.r_a0()});
+        Console.printf("cause: {x}\n", .{scause});
+        Console.kpanic("Unknown interrupt");
     }
 
     if (current) |proc| {
@@ -170,6 +170,9 @@ fn getSupervisorInterrupt(cause: u64) Interrupt {
     switch (flag) {
         riscv.SCAUSE_INT_SOFTWARE => {
             clockInterrupt();
+            const clear_pending_mask: u8 = 2;
+            riscv.w_sip(riscv.r_sip() & ~clear_pending_mask);
+
             return .Timer;
         },
         riscv.SCAUSE_INT_PLIC => {
@@ -177,7 +180,7 @@ fn getSupervisorInterrupt(cause: u64) Interrupt {
             return .External;
         },
         else => {
-            StdOut.printf("unknown fault: {}\n", .{flag});
+            Console.printf("unknown fault: {}\n", .{flag});
             return .Unknown;
         },
     }
@@ -190,17 +193,18 @@ fn plicInterrupt() void {
         0 => {
             return;
         },
+        riscv.UART0_IRQ => {
+            UART.handleInterrupt();
+        },
         riscv.VIRTIO0_IRQ => {
             Virtio.diskInterrupt();
         },
         else => {
-            StdOut.printf("plic interrupt: {}\n", .{interrupt_id});
+            Console.printf("unknown plic interrupt: {x}\n", .{interrupt_id});
         },
     }
 
-    if (interrupt_id != 0) {
-        riscv.plic_complete(interrupt_id);
-    }
+    riscv.plic_complete(interrupt_id);
 }
 
 inline fn clockInterrupt() void {

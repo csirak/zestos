@@ -8,8 +8,8 @@ inline fn plicSupervisorPriorityAddr(coreId: u64) *u32 {
 }
 
 pub fn init() void {
-    const uart_irq_addr: *u32 = @ptrFromInt(riscv.PLIC + riscv.UART0_IRQ * 4);
-    const virtio_irq_addr: *u32 = @ptrFromInt(riscv.PLIC + riscv.VIRTIO0_IRQ * 4);
+    const uart_irq_addr: *volatile u32 = @ptrFromInt(riscv.PLIC + riscv.UART0_IRQ * 4);
+    const virtio_irq_addr: *volatile u32 = @ptrFromInt(riscv.PLIC + riscv.VIRTIO0_IRQ * 4);
 
     uart_irq_addr.* = 1;
     virtio_irq_addr.* = 1;
@@ -17,9 +17,7 @@ pub fn init() void {
 
 pub fn coreInit() void {
     const coreId = riscv.cpuid();
-    const enableValue = (riscv.UART0_IRQ << 1) | (riscv.VIRTIO0_IRQ << 1);
-    const priorityValue = 0;
 
-    plicSupervisorEnableAddr(coreId).* = enableValue;
-    plicSupervisorPriorityAddr(coreId).* = priorityValue;
+    plicSupervisorEnableAddr(coreId).* = (1 << riscv.UART0_IRQ) | (1 << riscv.VIRTIO0_IRQ);
+    plicSupervisorPriorityAddr(coreId).* = 0;
 }

@@ -6,8 +6,8 @@ pub const PGSIZE = 4096; // bytes per page
 
 pub const KSTACK_SIZE = 2 * PGSIZE;
 
-pub const UART0: u64 = 0x10000000;
-pub const UART0_IRQ: u64 = 10;
+pub const UART0 = 0x10000000;
+pub const UART0_IRQ = 10;
 
 pub const VIRTIO0: u64 = 0x10001000;
 pub const VIRTIO0_IRQ: u64 = 1;
@@ -181,6 +181,21 @@ pub inline fn r_sie() u64 {
 
 pub inline fn w_sie(x: u64) void {
     asm volatile ("csrw sie, %[x]"
+        :
+        : [x] "r" (x),
+    );
+}
+
+pub inline fn r_sip() u64 {
+    var x: u64 = 0;
+    asm volatile ("csrr %[x], sip"
+        : [x] "=r" (x),
+    );
+    return x;
+}
+
+pub inline fn w_sip(x: u64) void {
+    asm volatile ("csrw sip, %[x]"
         :
         : [x] "r" (x),
     );

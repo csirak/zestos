@@ -29,18 +29,42 @@ pub const FileData = union(FileType) {
     }
 };
 
-pub fn write(self: *Self, buffer_ptr: u64, size: u64) !void {
+pub fn read(self: *Self, buffer_ptr: u64, size: u64) !i64 {
+    if (!self.readable) {
+        return error.PermissionDenied;
+    }
+
+    switch (self.data) {
+        .pipe => {},
+        .inode_file => |*info| {
+            info.inode.lock();
+            defer info.inode.release();
+            const ret = try info.inode.readToAddress(
+                buffer_ptr,
+                info.offset,
+                size,
+                true,
+            );
+            info.offset += ret;
+            return ret;
+        },
+        .device => |info| if (Device.getDevice(info.major)) |dev| return try dev.read(true, buffer_ptr, size),
+        else => @panic("invalid file type"),
+    }
+    return 0;
+}
+
+pub fn write(self: *Self, buffer_ptr: u64, size: u64) !i64 {
     if (!self.writable) {
         return error.PermissionDenied;
     }
     switch (self.data) {
         .pipe => {},
         .inode_file => {},
-        .device => |device| {
-            try Device.getDevice(device.major).?.write(buffer_ptr, size);
-        },
+        .device => |info| if (Device.getDevice(info.major)) |dev| return try dev.write(true, buffer_ptr, size),
         else => @panic("invalid file type"),
     }
+    return 0;
 }
 
 pub fn getInode(self: *Self) *INode {

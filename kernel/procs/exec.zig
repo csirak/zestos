@@ -11,7 +11,7 @@ const Pagetable = @import("../mem/pagetable.zig");
 const Log = @import("../fs/log.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 
-pub fn exec(path: [*:0]u8) !void {
+pub fn exec(path: [*:0]u8) !u64 {
     Log.beginTx();
     defer Log.endTx();
 
@@ -94,6 +94,7 @@ pub fn exec(path: [*:0]u8) !void {
 
     try old_pagetable.userFree(old_mem_size);
     // TODO: set up stack
+    return 1;
 }
 
 inline fn programHeaderFlagsToPagetableFlags(flags: elf.ProgramHeaderFlag) u16 {

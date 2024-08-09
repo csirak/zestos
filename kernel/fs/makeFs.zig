@@ -39,6 +39,7 @@ pub fn makeFs(log: bool) void {
 
     addUserProgram("user/_init", "init");
     addUserProgram("user/_sh", "sh");
+    addUserProgram("user/_ls", "ls");
 
     var root_inode: fs.DiskINode = undefined;
     readINode(root_inum, &root_inode);
@@ -105,9 +106,8 @@ fn iNodeAppend(inum: u16, bytes: []const u8) void {
     var buffer: fs.Block = undefined;
     var inode: fs.DiskINode = undefined;
     readINode(inum, &inode);
-    // debug.print("inode size: {d} bytes added: {d}\n", .{ inode.size, bytes.len });
-
-    var file_offset = inode.size;
+    const start = inode.size;
+    var file_offset = start;
     var bytes_left = bytes.len;
 
     var indirect_addrs_cache: ?[fs.INDIRECT_ADDRESS_SIZE]u32 = null;
@@ -165,7 +165,7 @@ fn iNodeAppend(inum: u16, bytes: []const u8) void {
         file_offset += bytes_to_write;
         writeBlock(block_num, buffer);
     }
-    inode.size = file_offset;
+    inode.size += file_offset - start;
     writeINode(inum, inode);
 }
 
@@ -221,4 +221,8 @@ fn addUserProgram(path: []const u8, name: []const u8) void {
         iNodeAppend(inode, &buffer);
     }
     debugPrint("bytes_read: {d}\n", .{bytes_read});
+}
+
+pub fn main() void {
+    makeFs(true);
 }

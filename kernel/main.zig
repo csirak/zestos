@@ -7,7 +7,7 @@ const Process = @import("procs/proc.zig");
 const KMem = @import("mem/kmem.zig");
 
 const Plic = @import("io/plic.zig");
-const StdOut = @import("io/stdout.zig");
+const Console = @import("io/console.zig");
 
 const BufferCache = @import("fs/buffercache.zig");
 const Virtio = @import("fs/virtio.zig");
@@ -18,6 +18,9 @@ var started: bool = false;
 
 pub export fn main() void {
     if (riscv.cpuid() == 0) {
+        Device.init();
+        Console.init();
+
         lib.println("get ready for the zest");
         lib.println("zest-os booting");
 
@@ -33,19 +36,17 @@ pub export fn main() void {
         Plic.coreInit();
 
         BufferCache.init();
-        FileTable.init();
         INodeTable.init();
+        FileTable.init();
         Virtio.init();
-        Device.init();
-        StdOut.init();
 
         Process.userInit() catch |e| {
-            lib.println("error initializing user process");
             lib.printf("error: {}\n", .{e});
+            lib.kpanic("error initializing init");
         };
 
         started = true;
-        StdOut.coreLog("started!");
+        Console.coreLog("started!");
 
         @fence(.seq_cst);
     } else {
@@ -56,7 +57,7 @@ pub export fn main() void {
         Traps.coreInit();
         Plic.coreInit();
 
-        StdOut.coreLog("started!");
+        Console.coreLog("started!");
     }
 
     Process.scheduler();

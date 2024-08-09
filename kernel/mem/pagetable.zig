@@ -56,7 +56,6 @@ pub fn getPageTableEntry(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
 
 pub fn mapPages(self: *Self, virtual_address: u64, physical_address: u64, size: u64, flags: u16) !void {
     const virtual_address_page_aligned = mem.pageAlignDown(virtual_address);
-
     const last_page = mem.pageAlignDown(virtual_address + size - 1);
 
     if ((last_page - virtual_address_page_aligned) % riscv.PGSIZE != 0) {
@@ -114,7 +113,6 @@ pub fn copy(self: *Self, dest: *Self, size: u64) !void {
         try dest.mapPages(i, @intFromPtr(page), riscv.PGSIZE, @intCast(flags));
     }
 }
-
 pub fn userAlloc(self: *Self, old_size: u64, new_size: u64, flags: u16) !u64 {
     if (new_size < old_size) {
         return new_size;
@@ -145,32 +143,31 @@ pub fn revokeUserPage(self: *Self, virtual_address: u64) !void {
 
 pub fn userDeAlloc(self: *Self, old_size: u64, new_size: u64) !u64 {
     if (new_size >= old_size) {
-        return new_size;
+        return old_size;
     }
 
     const new_page_aligned_addr = mem.pageAlignUp(new_size);
     const num_pages = @divExact((mem.pageAlignUp(old_size) - new_page_aligned_addr), riscv.PGSIZE);
-    if (num_pages == 0) {
-        return new_size;
+    if (num_pages != 0) {
+        try self.unMapPages(new_page_aligned_addr, num_pages, true);
     }
 
-    try self.unMapPages(new_page_aligned_addr, num_pages, true);
     return new_size;
 }
 
-pub fn copyInto(self: *Self, dest: u64, src: *[]u8, size: u64) !void {
-    lib.kpanic("not Implemented copyInto");
+pub fn copyInto(self: *Self, dest: u64, src: [*]u8, size: u64) !void {
+    var read: u64 = 0;
 
-    _ = self;
-    _ = dest;
-    _ = src;
-    _ = size;
-    // var bytes_left = size;
-    // var cur_dest_addr = dest;
-    // while (bytes_left > 0) {
-    //     const virtual_address = mem.pageAlignDown(cur_dest_addr);
-    //     const kernel_mem_addr = self.getPageTableEntry(virtual_address);
-    // }
+    while (read < size) {
+        const current_virtual_addr = dest + read;
+        const current_page = mem.pageAlignDown(current_virtual_addr);
+        const physcial_addr = try self.getUserPhysAddrFromVa(current_page);
+        const kernel_page: *riscv.Page = @ptrCast(physcial_addr);
+        const page_offset = mem.pageOffset(current_virtual_addr);
+        const bytes_to_copy = @min(size - read, riscv.PGSIZE - page_offset);
+        @memcpy(kernel_page[page_offset..][0..bytes_to_copy], src[read..][0..bytes_to_copy]);
+        read += bytes_to_copy;
+    }
 }
 
 pub fn copyFrom(self: *Self, src: u64, dest: [*]u8, size: u64) !void {
