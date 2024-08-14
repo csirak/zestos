@@ -239,7 +239,7 @@ fn addUserPrograms(path: []const u8, allocator: std.mem.Allocator) !void {
             }
             // user programs start with _
             addUserProgram(full_path, name[1..]);
-            std.debug.print("added user program {s}\n", .{name[1..]});
+            debugPrint("added user program {s}\n", .{name[1..]});
         }
     }
 }
