@@ -3,6 +3,8 @@ const lib = @import("../lib.zig");
 const riscv = @import("../riscv.zig");
 const Process = @import("proc.zig");
 
+const KMem = @import("../mem/kmem.zig");
+
 const File = @import("../fs/file.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 const FileTable = @import("../fs/filetable.zig");
@@ -34,7 +36,6 @@ const Static = struct {
 pub fn doSyscall() void {
     const proc = Process.currentOrPanic();
     const syscall_num = proc.trapframe.?.a7;
-
     switch (syscall_num) {
         SYSCALL_FORK => proc.trapframe.?.a0 = proc.fork() catch {
             lib.kpanic("Failed to fork");
@@ -47,7 +48,11 @@ pub fn doSyscall() void {
             proc.trapframe.?.a0 = @bitCast(readSys(proc));
         },
         SYSCALL_EXEC => {
-            proc.trapframe.?.a0 = @bitCast(execSys(proc));
+            const result = execSys(proc) catch |e| out: {
+                lib.printf("error: {}\n", .{e});
+                break :out -1;
+            };
+            proc.trapframe.?.a0 = @bitCast(result);
         },
         SYSCALL_STAT => {
             proc.trapframe.?.a0 = @bitCast(statSys(proc));
@@ -94,13 +99,30 @@ fn readSys(proc: *Process) i64 {
     };
 }
 
-fn execSys(proc: *Process) i64 {
+fn execSys(proc: *Process) !i64 {
     const path_user_address = proc.trapframe.?.a0;
+    const argv_user_address = proc.trapframe.?.a1;
     proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.exec_path_buff), MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
-    return exec(@ptrCast(&Static.exec_path_buff)) catch |e| {
+
+    var argv: [Process.MAX_ARGS]?[*:0]u8 = undefined;
+
+    for (0..Process.MAX_ARGS) |i| {
+        var cur_arg: u64 = undefined;
+        try proc.pagetable.?.copyFrom(argv_user_address + @sizeOf(u64) * i, @ptrCast(&cur_arg), @sizeOf(u64));
+        if (cur_arg == 0) {
+            argv[i] = null;
+            break;
+        }
+        const arg_ptr: [*:0]u8 = @ptrCast(try KMem.alloc());
+        try proc.pagetable.?.copyStringFromUser(cur_arg, @ptrCast(arg_ptr), riscv.PGSIZE);
+        lib.printf("arg_ptr: {s}\n", .{arg_ptr});
+        argv[i] = arg_ptr;
+    }
+
+    return exec(@ptrCast(&Static.exec_path_buff), argv) catch |e| {
         lib.printf("Failed to exec error: {}\n", .{e});
         return -1;
     };

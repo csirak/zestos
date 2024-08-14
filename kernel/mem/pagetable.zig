@@ -184,6 +184,32 @@ pub fn copyFrom(self: *Self, src: u64, dest: [*]u8, size: u64) !void {
     }
 }
 
+pub fn copyStringFromUser(self: *Self, src: u64, dest: [*]u8, max: u64) !void {
+    var bytes_written: u64 = 0;
+    while (bytes_written < max) {
+        const current_virtual_addr = src + bytes_written;
+        const current_page = mem.pageAlignDown(current_virtual_addr);
+        const page_offset = mem.pageOffset(current_virtual_addr);
+        const pte = try self.getPageTableEntry(current_page, false);
+        const kernel_page: *riscv.Page = @ptrCast(pageTableEntryToPhysAddr(pte.*));
+        const bytes_to_copy = @min(max - bytes_written, riscv.PGSIZE - page_offset);
+        @memcpy(dest[bytes_written..][0..bytes_to_copy], kernel_page[page_offset..][0..bytes_to_copy]);
+
+        for (dest[bytes_written..][0..bytes_to_copy], 0..) |c, i| {
+            if (c == 0) {
+                lib.printf("null byte found: {}\n", .{bytes_written + i});
+                return;
+            }
+        }
+        bytes_written += bytes_to_copy;
+    }
+}
+
+pub fn getStringFromUser(self: *Self, src: u64, dest: [*]u8, max: u64) !u64 {
+    try self.copyFrom(src, dest, max);
+    return lib.strLen(dest);
+}
+
 pub fn getUserPhysAddrFromVa(self: *Self, virtual_address: u64) !*u64 {
     if (virtual_address > riscv.MAXVA) {
         return error.VirtualAddressOutOfBounds;

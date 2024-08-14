@@ -47,6 +47,12 @@ pub fn kpanic(msg: []const u8) noreturn {
     unreachable;
 }
 
+pub fn strLen(s: []u8) u64 {
+    var i: u64 = 0;
+    while (s[i] != 0) : (i += 1) {}
+    return i;
+}
+
 pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     const len = @min(src.len, size);
     for (0..len) |i| {

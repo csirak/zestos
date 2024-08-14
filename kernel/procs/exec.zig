@@ -1,23 +1,24 @@
-const elf = @import("../fs/elf.zig");
+const std = @import("std");
 const riscv = @import("../riscv.zig");
 const lib = @import("../lib.zig");
+const elf = @import("../fs/elf.zig");
 
 const mem = @import("../mem/mem.zig");
 
 const Process = @import("proc.zig");
-const INode = @import("../fs/inode.zig");
 
 const Pagetable = @import("../mem/pagetable.zig");
+
 const Log = @import("../fs/log.zig");
+const INode = @import("../fs/inode.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 
-pub fn exec(path: [*:0]u8) !i64 {
+pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     Log.beginTx();
-    defer Log.endTx();
 
     const inode = try INodeTable.getNamedInode(path);
     inode.lock();
-    defer inode.release();
+    defer INodeTable.removeRefAndRelease(inode);
 
     var elf_header: elf.ElfHeader = undefined;
 
@@ -39,7 +40,6 @@ pub fn exec(path: [*:0]u8) !i64 {
     const old_mem_size = proc.mem_size;
     var pagetable = try proc.getTrapFrameMappedPageTable();
 
-    // TODO: Make sure this var is value is not copied directly
     errdefer pagetable.userFree(user_space_size) catch unreachable;
 
     while (cur_program_header < elf_header.program_header_count) : (cur_program_header += 1) {
@@ -66,16 +66,49 @@ pub fn exec(path: [*:0]u8) !i64 {
         user_space_size = try pagetable.userAlloc(user_space_size, program_header.virtual_addr + program_header.memory_size, flags);
         try loadSegment(&pagetable, program_header.virtual_addr, inode, program_header.offset, program_header.file_size);
     }
+    Log.endTx();
 
     // TODO: check page alignment
     const page_aligned_size = mem.pageAlignUp(user_space_size);
     const stack_top = page_aligned_size + 2 * riscv.PGSIZE;
     proc.mem_size = try pagetable.userAlloc(user_space_size, stack_top, mem.PTE_W);
 
+    var sp = stack_top;
     // add guard page before top
     try pagetable.revokeUserPage(page_aligned_size);
+    const stack_base = stack_top - riscv.PGSIZE;
 
-    // const stack_base = stack_top - riscv.PGSIZE;
+    var user_stack = [_]u64{0} ** Process.MAX_ARGS;
+
+    var argc: u64 = 0;
+    while (argv[argc]) |arg| {
+        if (argc >= Process.MAX_ARGS) {
+            return error.TooManyArguments;
+        }
+        const arg_len = std.mem.len(arg) + 1;
+        sp -= arg_len;
+        // stack ptr aligned to 16 bytes
+        sp -= sp % 16;
+        argc += 1;
+
+        if (sp < stack_base) {
+            return error.StackOverflow;
+        }
+        try pagetable.copyInto(sp, arg, arg_len);
+        user_stack[argc] = sp;
+    }
+    // push argv array
+    const argv_array_size = (argc + 1) * @sizeOf(u64);
+    sp -= argv_array_size;
+    sp -= sp % 16;
+
+    if (sp < stack_base) {
+        return error.StackOverflow;
+    }
+    try pagetable.copyInto(sp, @ptrCast(&user_stack), argv_array_size);
+
+    proc.trapframe.?.a1 = sp;
+
     var last_back_slash: u16 = 0;
     var i: u16 = 0;
     while (path[i] != 0) : (i += 1) {
