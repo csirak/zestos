@@ -95,3 +95,18 @@ pub fn printf(comptime fmt: []const u8, args: anytype) void {
     const out = std.fmt.allocPrint(print_allocator, fmt, args) catch unreachable;
     print(out);
 }
+
+pub fn intToAsciiHex(n: u8) u8 {
+    if (n < 10) {
+        return n + '0';
+    } else {
+        return n + 'a' - 10;
+    }
+}
+
+pub fn printByte(b: u8) void {
+    var out = [_]u8{0} ** 3;
+    out[0] = intToAsciiHex(@intCast((b >> 4) & 0xF));
+    out[1] = intToAsciiHex(@intCast(b & 0xF));
+    print(out[0..3]);
+}

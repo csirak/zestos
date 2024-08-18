@@ -1,5 +1,6 @@
 const fs = @import("../fs/fs.zig");
 const lib = @import("../lib.zig");
+const Uart = @import("../io/uart.zig");
 
 pub fn bytesDump(bytes: *[]u8, row_width: comptime_int, total_bytes: comptime_int, address_offset: u64) void {
     if (total_bytes % row_width != 0) {
@@ -9,19 +10,19 @@ pub fn bytesDump(bytes: *[]u8, row_width: comptime_int, total_bytes: comptime_in
     const row_nums = @divExact(total_bytes, row_width);
     const row_aligned_block: *const [row_nums][row_width]u8 = @ptrCast(bytes);
     for (row_aligned_block, 0..) |row, i| {
-        lib.printf("0x{x}", .{address_offset + i * row_width});
+        lib.printf(" 0x{x}", .{address_offset + i * row_width});
         tab();
-        lib.put_char('|');
+        Uart.putc('|');
 
         for (row) |byte| {
             lib.printByte((byte));
             space();
         }
         tab();
-        lib.put_char('|');
+        Uart.putc('|');
 
         for (row) |byte| {
-            lib.put_char(filterChar(byte));
+            Uart.putc(filterChar(byte));
             space();
             space();
         }
@@ -32,7 +33,8 @@ pub fn bytesDump(bytes: *[]u8, row_width: comptime_int, total_bytes: comptime_in
 
 pub fn blockDump(block_num: u16, block: *fs.Block, row_width: comptime_int) void {
     logBlockInfo(block_num);
-    bytesDump(@alignCast(@ptrCast(block)), row_width, fs.BLOCK_SIZE, block_num * fs.BLOCK_SIZE);
+    const block_large: u64 = @intCast(block_num);
+    bytesDump(@alignCast(@ptrCast(block)), row_width, fs.BLOCK_SIZE, block_large * fs.BLOCK_SIZE);
 }
 
 fn filterChar(c: u8) u8 {
@@ -92,19 +94,19 @@ fn logHeader(row_width: comptime_int) void {
         space();
     }
     tab();
-    lib.put_char('|');
+    Uart.putc('|');
 
     for (0..row_width) |i| {
         lib.printByte(@intCast(i));
-        lib.put_char('|');
+        Uart.putc('|');
     }
 
     tab();
-    lib.put_char('|');
+    Uart.putc('|');
 
     for (0..row_width) |i| {
         lib.printByte(@intCast(i));
-        lib.put_char('|');
+        Uart.putc('|');
     }
 
     newline();
@@ -112,7 +114,7 @@ fn logHeader(row_width: comptime_int) void {
 }
 
 fn space() void {
-    lib.put_char(' ');
+    Uart.putc(' ');
 }
 
 fn tab() void {
@@ -121,5 +123,5 @@ fn tab() void {
 }
 
 fn newline() void {
-    lib.put_char('\n');
+    Uart.putc('\n');
 }

@@ -127,7 +127,7 @@ export fn kerneltrap() void {
     }
 
     if (riscv.intr_get()) {
-        Console.kpanic("Interrupts on");
+        lib.kpanic("Interrupts on");
     }
 
     const reason = getSupervisorInterrupt(scause);
