@@ -71,7 +71,6 @@ pub inline fn CTRL(c: u8) u8 {
     }
 }
 
-var count: u8 = 0;
 pub fn read(user_addr: bool, buffer_ptr: u64, size: u64) !u64 {
     const proc = Process.currentOrPanic();
     var cur_read: u64 = 0;
@@ -83,7 +82,7 @@ pub fn read(user_addr: bool, buffer_ptr: u64, size: u64) !u64 {
             if (proc.isKilled()) return error.Interrupted;
             proc.sleep(&ConsoleBuf.read_ptr, &ConsoleBuf.lock);
         }
-        var char = ConsoleBuf.buffer[ConsoleBuf.read_ptr % CONSOLE_BUF_SIZE];
+        const char = ConsoleBuf.buffer[ConsoleBuf.read_ptr % CONSOLE_BUF_SIZE];
         ConsoleBuf.read_ptr += 1;
 
         if (char == CTRL('D')) {
@@ -93,7 +92,6 @@ pub fn read(user_addr: bool, buffer_ptr: u64, size: u64) !u64 {
             }
             break;
         }
-
         if (user_addr) {
             try proc.pagetable.?.copyInto(buffer_ptr + cur_read, @ptrCast(&char), 1);
         } else {
@@ -137,10 +135,14 @@ pub fn handleInterrupt(char: u8) void {
             if (ConsoleBuf.edit_ptr - ConsoleBuf.read_ptr >= CONSOLE_BUF_SIZE) {
                 return;
             }
-            const screen_char = if (char == '\r') '\n' else char;
+            const screen_char = switch (char) {
+                '\r' => '\n',
+                0xA0 => ' ',
+                else => char,
+            };
             putc(screen_char);
 
-            ConsoleBuf.buffer[ConsoleBuf.edit_ptr % CONSOLE_BUF_SIZE] = char;
+            ConsoleBuf.buffer[ConsoleBuf.edit_ptr % CONSOLE_BUF_SIZE] = screen_char;
             ConsoleBuf.edit_ptr += 1;
 
             if (screen_char == '\n' or screen_char == CTRL('D') or ConsoleBuf.edit_ptr - ConsoleBuf.read_ptr == CONSOLE_BUF_SIZE) {

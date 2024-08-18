@@ -155,7 +155,7 @@ pub fn userDeAlloc(self: *Self, old_size: u64, new_size: u64) !u64 {
     return new_size;
 }
 
-pub fn copyInto(self: *Self, dest: u64, src: [*]u8, size: u64) !void {
+pub fn copyInto(self: *Self, dest: u64, src: [*]const u8, size: u64) !void {
     var read: u64 = 0;
 
     while (read < size) {
@@ -195,19 +195,13 @@ pub fn copyStringFromUser(self: *Self, src: u64, dest: [*]u8, max: u64) !void {
         const bytes_to_copy = @min(max - bytes_written, riscv.PGSIZE - page_offset);
         @memcpy(dest[bytes_written..][0..bytes_to_copy], kernel_page[page_offset..][0..bytes_to_copy]);
 
-        for (dest[bytes_written..][0..bytes_to_copy], 0..) |c, i| {
+        for (dest[bytes_written..][0..bytes_to_copy]) |c| {
             if (c == 0) {
-                lib.printf("null byte found: {}\n", .{bytes_written + i});
                 return;
             }
         }
         bytes_written += bytes_to_copy;
     }
-}
-
-pub fn getStringFromUser(self: *Self, src: u64, dest: [*]u8, max: u64) !u64 {
-    try self.copyFrom(src, dest, max);
-    return lib.strLen(dest);
 }
 
 pub fn getUserPhysAddrFromVa(self: *Self, virtual_address: u64) !*u64 {

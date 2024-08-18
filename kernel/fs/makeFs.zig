@@ -113,7 +113,8 @@ fn iNodeAppend(inum: u16, bytes: []const u8) void {
     var file_offset = start;
     var bytes_left = bytes.len;
 
-    var indirect_addrs_cache: ?[fs.INDIRECT_ADDRESS_SIZE]u32 = null;
+    var has_cache: bool = false;
+    var indirect_addrs_cache: [fs.INDIRECT_ADDRESS_SIZE]u32 = undefined;
 
     const blocks_to_write = @divFloor(inode.size + bytes.len, fs.BLOCK_SIZE);
     if (blocks_to_write > fs.MAX_ADDRESS_SIZE) {
@@ -138,17 +139,18 @@ fn iNodeAppend(inum: u16, bytes: []const u8) void {
                     free_block += 1;
                 }
                 // load indirect address only once into cache
-                var indirect_addrs = indirect_addrs_cache orelse addrs: {
-                    indirect_addrs_cache = undefined;
-                    const indirect_block_num = inode.direct[fs.DIRECT_ADDRESS_SIZE];
-                    readBlock(indirect_block_num, @ptrCast(@alignCast(&indirect_addrs_cache)));
-                    break :addrs indirect_addrs_cache.?;
-                };
 
+                if (!has_cache) {
+                    readBlock(inode.direct[fs.DIRECT_ADDRESS_SIZE], @ptrCast(@alignCast(&indirect_addrs_cache)));
+                    has_cache = true;
+                }
+                var indirect_addrs = indirect_addrs_cache;
                 // get block within indirect range
                 const indirect_index = block_index - fs.DIRECT_ADDRESS_SIZE;
                 if (indirect_addrs[indirect_index] == 0) {
                     indirect_addrs[indirect_index] = free_block;
+                    const indirect_addrs_casted: *[fs.BLOCK_SIZE]u8 = @ptrCast(@alignCast(&indirect_addrs));
+                    writeBlock(inode.direct[fs.DIRECT_ADDRESS_SIZE], indirect_addrs_casted.*);
                     free_block += 1;
                 }
                 break :num indirect_addrs[indirect_index];
@@ -204,8 +206,8 @@ fn bitMapAdd(blocks: u64) void {
 
 fn addUserProgram(path: []const u8, name: []const u8) void {
     debugPrint("adding user program {s}\n", .{name});
-    const inode = diskINodeAlloc(fs.INODE_FILE);
-    const dir_entry = fs.dirEntry(inode, name);
+    const inode_num = diskINodeAlloc(fs.INODE_FILE);
+    const dir_entry = fs.dirEntry(inode_num, name);
     iNodeAppend(fs.ROOT_INODE, std.mem.asBytes(&dir_entry));
 
     const program_file = std.fs.cwd().openFile(path, .{}) catch |err| {
@@ -221,9 +223,8 @@ fn addUserProgram(path: []const u8, name: []const u8) void {
         bytes_read += program_file.readAll(&buffer) catch |err| {
             debug.panic("Failed to read program file: {s}", .{@errorName(err)});
         };
-        iNodeAppend(inode, &buffer);
+        iNodeAppend(inode_num, &buffer);
     }
-    debugPrint("bytes_read: {d}\n", .{bytes_read});
 }
 
 fn addUserPrograms(path: []const u8, allocator: std.mem.Allocator) !void {

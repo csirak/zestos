@@ -8,6 +8,7 @@ const mem = @import("../mem/mem.zig");
 const Process = @import("proc.zig");
 
 const Pagetable = @import("../mem/pagetable.zig");
+const KMem = @import("../mem/kmem.zig");
 
 const Log = @import("../fs/log.zig");
 const INode = @import("../fs/inode.zig");
@@ -73,13 +74,13 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     const stack_top = page_aligned_size + 2 * riscv.PGSIZE;
     proc.mem_size = try pagetable.userAlloc(user_space_size, stack_top, mem.PTE_W);
 
-    var sp = stack_top;
     // add guard page before top
     try pagetable.revokeUserPage(page_aligned_size);
     const stack_base = stack_top - riscv.PGSIZE;
 
     var user_stack = [_]u64{0} ** Process.MAX_ARGS;
 
+    var sp = stack_top;
     var argc: u64 = 0;
     while (argv[argc]) |arg| {
         if (argc >= Process.MAX_ARGS) {
@@ -89,13 +90,13 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
         sp -= arg_len;
         // stack ptr aligned to 16 bytes
         sp -= sp % 16;
-        argc += 1;
 
         if (sp < stack_base) {
             return error.StackOverflow;
         }
         try pagetable.copyInto(sp, arg, arg_len);
         user_stack[argc] = sp;
+        argc += 1;
     }
     // push argv array
     const argv_array_size = (argc + 1) * @sizeOf(u64);
@@ -123,11 +124,11 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     proc.pagetable = pagetable;
     proc.mem_size = stack_top;
     proc.trapframe.?.epc = elf_header.entry;
-    proc.trapframe.?.sp = stack_top;
+    proc.trapframe.?.sp = sp;
 
     try old_pagetable.userFree(old_mem_size);
     // TODO: set up stack
-    return 1;
+    return @intCast(argc);
 }
 
 inline fn programHeaderFlagsToPagetableFlags(flags: elf.ProgramHeaderFlag) u16 {
@@ -143,13 +144,14 @@ inline fn programHeaderFlagsToPagetableFlags(flags: elf.ProgramHeaderFlag) u16 {
 fn loadSegment(pagetable: *Pagetable, virtual_addr: u64, inode: *INode, file_offset: u64, size: u64) !void {
     var cur_offset: u64 = 0;
 
-    while (cur_offset < size) : (cur_offset += riscv.PGSIZE) {
+    while (cur_offset < size) {
         const page = try pagetable.getUserPhysAddrFromVa(virtual_addr + cur_offset);
         const page_offset: u64 = @intFromPtr(page) + virtual_addr % riscv.PGSIZE;
-        const bytes_to_read = if (size - cur_offset < riscv.PGSIZE) size - cur_offset else riscv.PGSIZE;
+        const bytes_to_read = @min(size - cur_offset, riscv.PGSIZE);
         const bytes_read = try inode.readToAddress(page_offset, file_offset + cur_offset, bytes_to_read, false);
         if (bytes_read != bytes_to_read) {
             return error.InodeReadError;
         }
+        cur_offset += bytes_read;
     }
 }

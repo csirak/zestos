@@ -107,7 +107,7 @@ fn execSys(proc: *Process) !i64 {
         lib.kpanic("Failed to copy path from user to kernel");
     };
 
-    var argv: [Process.MAX_ARGS]?[*:0]u8 = undefined;
+    var argv = [_]?[*:0]u8{null} ** Process.MAX_ARGS;
 
     for (0..Process.MAX_ARGS) |i| {
         var cur_arg: u64 = undefined;
@@ -116,16 +116,19 @@ fn execSys(proc: *Process) !i64 {
             argv[i] = null;
             break;
         }
+
         const arg_ptr: [*:0]u8 = @ptrCast(try KMem.alloc());
         try proc.pagetable.?.copyStringFromUser(cur_arg, @ptrCast(arg_ptr), riscv.PGSIZE);
-        lib.printf("arg_ptr: {s}\n", .{arg_ptr});
         argv[i] = arg_ptr;
     }
 
-    return exec(@ptrCast(&Static.exec_path_buff), argv) catch |e| {
-        lib.printf("Failed to exec error: {}\n", .{e});
-        return -1;
-    };
+    defer {
+        for (argv) |arg| if (arg) |ptr| {
+            KMem.free(@intFromPtr(ptr));
+        };
+    }
+
+    return exec(@ptrCast(&Static.exec_path_buff), argv) catch -1;
 }
 
 fn openSys(proc: *Process) i64 {
@@ -223,7 +226,6 @@ fn writeSys(proc: *Process) i64 {
     const fd = proc.trapframe.?.a0;
     const file = proc.open_files[fd].?;
     const buff_user_address = proc.trapframe.?.a1;
-
     const size = proc.trapframe.?.a2;
     return file.write(buff_user_address, size) catch |e| {
         lib.printf("error: {}\n", .{e});
