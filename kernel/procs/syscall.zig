@@ -27,12 +27,6 @@ pub const SYSCALL_CLOSE = 21;
 
 const MAX_PATH = 128;
 
-const Static = struct {
-    var exec_path_buff: [MAX_PATH]u8 = undefined;
-    var open_path_buff: [MAX_PATH]u8 = undefined;
-    var makenode_path_buff: [MAX_PATH]u8 = undefined;
-};
-
 pub fn doSyscall() void {
     const proc = Process.currentOrPanic();
     const syscall_num = proc.trapframe.?.a7;
@@ -102,7 +96,11 @@ fn readSys(proc: *Process) i64 {
 fn execSys(proc: *Process) !i64 {
     const path_user_address = proc.trapframe.?.a0;
     const argv_user_address = proc.trapframe.?.a1;
-    proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.exec_path_buff), MAX_PATH) catch |e| {
+    const S = struct {
+        var path_buff = [_]u8{0} ** MAX_PATH;
+    };
+
+    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
@@ -128,15 +126,19 @@ fn execSys(proc: *Process) !i64 {
         };
     }
 
-    return exec(@ptrCast(&Static.exec_path_buff), argv) catch -1;
+    return exec(@ptrCast(&S.path_buff), argv) catch -1;
 }
 
 fn openSys(proc: *Process) i64 {
+    const S = struct {
+        var path_buff = [_]u8{0} ** MAX_PATH;
+    };
     Log.beginTx();
     defer Log.endTx();
 
     const path_user_address = proc.trapframe.?.a0;
-    proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.open_path_buff), MAX_PATH) catch |e| {
+
+    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
@@ -144,11 +146,11 @@ fn openSys(proc: *Process) i64 {
     const mode = proc.trapframe.?.a1;
     const inode = inode: {
         if (mode & File.O_CREATE != 0) {
-            break :inode INodeTable.create(@ptrCast(&Static.open_path_buff), fs.INODE_FILE, 0, 0) catch {
+            break :inode INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_FILE, 0, 0) catch {
                 return -1;
             };
         } else {
-            const file_inode = INodeTable.getNamedInode(@ptrCast(&Static.open_path_buff)) catch {
+            const file_inode = INodeTable.getNamedInode(@ptrCast(&S.path_buff)) catch {
                 return -1;
             };
             file_inode.lock();
@@ -234,8 +236,11 @@ fn writeSys(proc: *Process) i64 {
 }
 
 fn makedNodeSys(proc: *Process) i64 {
+    const S = struct {
+        var path_buff = [_]u8{0} ** MAX_PATH;
+    };
     const path_user_address = proc.trapframe.?.a0;
-    proc.pagetable.?.copyFrom(path_user_address, @ptrCast(&Static.makenode_path_buff), MAX_PATH) catch |e| {
+    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
@@ -243,7 +248,7 @@ fn makedNodeSys(proc: *Process) i64 {
     const minor: u16 = @intCast(proc.trapframe.?.a2);
     Log.beginTx();
     defer Log.endTx();
-    const inode = INodeTable.create(@ptrCast(&Static.makenode_path_buff), fs.INODE_DEVICE, major, minor) catch |e| {
+    const inode = INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_DEVICE, major, minor) catch |e| {
         lib.printf("error: {}\n", .{e});
         return -1;
     };
