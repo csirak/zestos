@@ -34,12 +34,9 @@ pub fn makeFs(log: bool) void {
     const dot = fs.dirEntry(root_inum, ".");
     const dotdot = fs.dirEntry(root_inum, "..");
 
-    iNodeAppend(root_inum, std.mem.asBytes(&dot));
-    iNodeAppend(root_inum, std.mem.asBytes(&dotdot));
+    iNodeAppend(root_inum, std.mem.asBytes(&dot), @sizeOf(fs.DirEntry));
+    iNodeAppend(root_inum, std.mem.asBytes(&dotdot), @sizeOf(fs.DirEntry));
 
-    // addUserProgram("user/_init", "init");
-    // addUserProgram("user/_sh", "sh");
-    // addUserProgram("user/_ls", "ls");
     addUserPrograms("user", std.heap.page_allocator) catch |err| {
         debug.panic("Failed to add user programs: {s}", .{@errorName(err)});
     };
@@ -105,13 +102,13 @@ fn readINode(inum: u16, inode: *fs.DiskINode) void {
     inode.* = buffer_inode.*;
 }
 
-fn iNodeAppend(inum: u16, bytes: []const u8) void {
+fn iNodeAppend(inum: u16, bytes: []const u8, size: u64) void {
     var buffer: fs.Block = undefined;
     var inode: fs.DiskINode = undefined;
     readINode(inum, &inode);
     const start = inode.size;
     var file_offset = start;
-    var bytes_left = bytes.len;
+    var bytes_left = size;
 
     var has_cache: bool = false;
     var indirect_addrs_cache: [fs.INDIRECT_ADDRESS_SIZE]u32 = undefined;
@@ -208,7 +205,7 @@ fn addUserProgram(path: []const u8, name: []const u8) void {
     debugPrint("adding user program {s}\n", .{name});
     const inode_num = diskINodeAlloc(fs.INODE_FILE);
     const dir_entry = fs.dirEntry(inode_num, name);
-    iNodeAppend(fs.ROOT_INODE, std.mem.asBytes(&dir_entry));
+    iNodeAppend(fs.ROOT_INODE, std.mem.asBytes(&dir_entry), @sizeOf(fs.DirEntry));
 
     const program_file = std.fs.cwd().openFile(path, .{}) catch |err| {
         debug.panic("Failed to create disk: {s}", .{@errorName(err)});
@@ -220,10 +217,11 @@ fn addUserProgram(path: []const u8, name: []const u8) void {
     };
     var bytes_read: u64 = 0;
     while (bytes_read < size) {
-        bytes_read += program_file.readAll(&buffer) catch |err| {
+        const buffer_size = program_file.readAll(&buffer) catch |err| {
             debug.panic("Failed to read program file: {s}", .{@errorName(err)});
         };
-        iNodeAppend(inode_num, &buffer);
+        bytes_read += buffer_size;
+        iNodeAppend(inode_num, &buffer, buffer_size);
     }
 }
 

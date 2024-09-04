@@ -80,7 +80,7 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
 
     var user_stack = [_]u64{0} ** Process.MAX_ARGS;
 
-    var sp = stack_top;
+    var sp = stack_top - 1;
     var argc: u64 = 0;
     while (argv[argc]) |arg| {
         if (argc >= Process.MAX_ARGS) {
@@ -114,11 +114,11 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     var i: u16 = 0;
     while (path[i] != 0) : (i += 1) {
         if (path[i] == '/') {
-            last_back_slash = i;
+            last_back_slash = i + 1;
         }
     }
 
-    lib.strCopyNullTerm(&proc.name, path[last_back_slash + 1 ..], Process.NAME_SIZE);
+    lib.strCopyNullTerm(&proc.name, path[last_back_slash..], Process.NAME_SIZE);
 
     var old_pagetable = proc.pagetable.?;
     proc.pagetable = pagetable;
@@ -127,7 +127,6 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     proc.trapframe.?.sp = sp;
 
     try old_pagetable.userFree(old_mem_size);
-    // TODO: set up stack
     return @intCast(argc);
 }
 

@@ -21,7 +21,7 @@ pub fn acquire(self: *Self) void {
     var c = Cpu.current();
     c.pushInterrupt();
     if (self.haveLock()) {
-        lib.print(self.name);
+        lib.println(self.name);
         lib.kpanic("Spinlock already locked");
     }
 

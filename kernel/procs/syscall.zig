@@ -245,6 +245,7 @@ fn dupSys(proc: *Process) i64 {
     const new_fd = proc.fileDescriptorAlloc(file) catch {
         return -1;
     };
+    _ = FileTable.duplicate(file);
     return @intCast(new_fd);
 }
 
@@ -271,10 +272,7 @@ fn writeSys(proc: *Process) i64 {
     const file = proc.open_files[fd].?;
     const buff_user_address = proc.trapframe.?.a1;
     const size = proc.trapframe.?.a2;
-    return file.write(buff_user_address, size) catch |e| {
-        lib.printf("error: {}\n", .{e});
-        return -1;
-    };
+    return file.write(buff_user_address, size) catch return -1;
 }
 
 fn makedNodeSys(proc: *Process) i64 {
