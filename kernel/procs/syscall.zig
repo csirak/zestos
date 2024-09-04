@@ -6,6 +6,7 @@ const Process = @import("proc.zig");
 const KMem = @import("../mem/kmem.zig");
 
 const File = @import("../fs/file.zig");
+const Pipe = @import("../fs/pipe.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 const FileTable = @import("../fs/filetable.zig");
 const Log = @import("../fs/log.zig");
@@ -15,6 +16,7 @@ const exec = @import("exec.zig").exec;
 pub const SYSCALL_FORK = 1;
 pub const SYSCALL_EXIT = 2;
 pub const SYSCALL_WAIT = 3;
+pub const SYSCALL_PIPE = 4;
 pub const SYSCALL_READ = 5;
 pub const SYSCALL_EXEC = 7;
 pub const SYSCALL_STAT = 8;
@@ -40,6 +42,14 @@ pub fn doSyscall() void {
         },
         SYSCALL_READ => {
             proc.trapframe.?.a0 = @bitCast(readSys(proc));
+        },
+        SYSCALL_PIPE => {
+            const res = pipeSys(proc) catch |e| out: {
+                lib.printf("error: {}\n", .{e});
+                break :out -1;
+            };
+
+            proc.trapframe.?.a0 = @bitCast(res);
         },
         SYSCALL_EXEC => {
             const result = execSys(proc) catch |e| out: {
@@ -91,6 +101,38 @@ fn readSys(proc: *Process) i64 {
         lib.printf("error: {}\n", .{e});
         return -1;
     };
+}
+
+fn pipeSys(proc: *Process) !i64 {
+    var read_file: *File = undefined;
+    var write_file: *File = undefined;
+    try Pipe.alloc(&read_file, &write_file);
+
+    errdefer FileTable.free(read_file);
+    errdefer FileTable.free(write_file);
+
+    const fd_array_user_ptr = proc.trapframe.?.a0;
+
+    var file_descriptors: [2]u32 = undefined;
+
+    file_descriptors[0] = @truncate(try proc.fileDescriptorAlloc(read_file));
+    errdefer proc.fileDescriptorFree(file_descriptors[0]) catch |e| {
+        lib.printf("error: {}\n", .{e});
+        lib.kpanic("Failed to copy path from user to kernel");
+    };
+
+    file_descriptors[1] = @truncate(try proc.fileDescriptorAlloc(write_file));
+    errdefer proc.fileDescriptorFree(file_descriptors[1]) catch |e| {
+        lib.printf("error: {}\n", .{e});
+        lib.kpanic("Failed to copy path from user to kernel");
+    };
+
+    try proc.pagetable.?.copyInto(
+        fd_array_user_ptr,
+        @ptrCast(&file_descriptors),
+        @sizeOf(@TypeOf(file_descriptors)),
+    );
+    return 0;
 }
 
 fn execSys(proc: *Process) !i64 {

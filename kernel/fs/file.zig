@@ -1,5 +1,5 @@
 const INode = @import("inode.zig");
-const Pipe = @import("pipe.zig").Pipe;
+const Pipe = @import("pipe.zig");
 const Device = @import("../device.zig");
 const INodeTable = @import("inode.zig");
 const lib = @import("../lib.zig");
@@ -30,13 +30,26 @@ pub const FileData = union(FileType) {
     }
 };
 
+reference_count: u16,
+readable: bool,
+writable: bool,
+data: FileData,
+
+pub const O_RDONLY = 0x000;
+pub const O_WRONLY = 0x001;
+pub const O_RDWR = 0x002;
+pub const O_CREATE = 0x200;
+pub const O_TRUNC = 0x400;
+
 pub fn read(self: *Self, buffer_ptr: u64, size: u64) !i64 {
     if (!self.readable) {
         return error.PermissionDenied;
     }
 
     switch (self.data) {
-        .pipe => {},
+        .pipe => |pipe| {
+            return pipe.read(buffer_ptr, size);
+        },
         .inode_file => |*info| {
             info.inode.lock();
             defer info.inode.release();
@@ -49,8 +62,12 @@ pub fn read(self: *Self, buffer_ptr: u64, size: u64) !i64 {
             info.offset += ret;
             return ret;
         },
-        .device => |info| if (Device.getDevice(info.major)) |dev| return try dev.read(true, buffer_ptr, size),
-        else => @panic("invalid file type"),
+        .device => |info| if (Device.getDevice(info.major)) |dev| return try dev.read(
+            true,
+            buffer_ptr,
+            size,
+        ),
+        else => @panic("invalid file type read"),
     }
     return 0;
 }
@@ -59,11 +76,18 @@ pub fn write(self: *Self, buffer_ptr: u64, size: u64) !i64 {
     if (!self.writable) {
         return error.PermissionDenied;
     }
+
     switch (self.data) {
-        .pipe => {},
-        .inode_file => {},
+        .pipe => |pipe| {
+            return pipe.write(buffer_ptr, size);
+        },
+        .inode_file => {
+            @panic("inode file");
+        },
         .device => |info| if (Device.getDevice(info.major)) |dev| return try dev.write(true, buffer_ptr, size),
-        else => @panic("invalid file type"),
+        else => {
+            return error.InvalidFileRead;
+        },
     }
     return 0;
 }
@@ -72,7 +96,7 @@ pub fn getInode(self: *Self) *INode {
     return switch (self.data) {
         .inode_file => |info| info.inode,
         .device => |info| info.inode,
-        else => @panic("invalid file type"),
+        else => @panic("invalid file type getInode"),
     };
 }
 
@@ -81,7 +105,7 @@ pub fn getStat(self: *Self, addr: u64) !i64 {
     var stat: INode.Stat = undefined;
     switch (self.data) {
         .inode_file, .device => {},
-        else => @panic("invalid file type"),
+        else => @panic("invalid file type getStat"),
     }
     const inode = self.getInode();
     inode.lock();
@@ -90,14 +114,3 @@ pub fn getStat(self: *Self, addr: u64) !i64 {
     try proc.pagetable.?.copyInto(addr, @ptrCast(&stat), @sizeOf(INode.Stat));
     return 0;
 }
-
-reference_count: u16,
-readable: bool,
-writable: bool,
-data: FileData,
-
-pub const O_RDONLY = 0x000;
-pub const O_WRONLY = 0x001;
-pub const O_RDWR = 0x002;
-pub const O_CREATE = 0x200;
-pub const O_TRUNC = 0x400;

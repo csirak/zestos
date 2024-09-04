@@ -216,6 +216,14 @@ pub fn fileDescriptorAlloc(self: *Self, file: *File) !u64 {
     return error.NoFileDescriptorAvailable;
 }
 
+pub fn fileDescriptorFree(self: *Self, fd: u64) !void {
+    if (fd < fs.MAX_OPEN_FILES and self.open_files[fd] != null) {
+        self.open_files[fd] = null;
+        return;
+    }
+    return error.InvalidFD;
+}
+
 pub fn yield(self: *Self) void {
     self.lock.acquire();
     defer self.lock.release();

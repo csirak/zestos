@@ -36,18 +36,20 @@ pub fn free(file: *File) void {
         switch (file.reference_count) {
             1 => {
                 file.reference_count = 0;
+                file.data = .none;
             },
             0 => @panic("file closed"),
             else => {
-                file.reference_count = file.reference_count - 1;
+                file.reference_count -= 1;
                 return;
             },
         }
-        file.data = .none;
     }
 
     switch (file_data.data) {
-        .pipe => {},
+        .pipe => |pipe| {
+            pipe.close(file.writable);
+        },
         .inode_file, .device => {
             Log.beginTx();
             defer Log.endTx();
