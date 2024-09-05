@@ -20,11 +20,13 @@ pub const SYSCALL_PIPE = 4;
 pub const SYSCALL_READ = 5;
 pub const SYSCALL_EXEC = 7;
 pub const SYSCALL_STAT = 8;
+pub const SYSCALL_CHDIR = 9;
 pub const SYSCALL_DUP = 10;
 pub const SYSCALL_SBRK = 12;
 pub const SYSCALL_OPEN = 15;
 pub const SYSCALL_WRITE = 16;
 pub const SYSCALL_MAKE_NODE = 17;
+pub const SYSCALL_MKDIR = 20;
 pub const SYSCALL_CLOSE = 21;
 
 const MAX_PATH = 128;
@@ -61,6 +63,9 @@ pub fn doSyscall() void {
         SYSCALL_STAT => {
             proc.trapframe.?.a0 = @bitCast(statSys(proc));
         },
+        SYSCALL_CHDIR => {
+            proc.trapframe.?.a0 = @bitCast(chdirSys(proc) catch -1);
+        },
         SYSCALL_DUP => {
             proc.trapframe.?.a0 = @bitCast(dupSys(proc));
         },
@@ -71,12 +76,14 @@ pub fn doSyscall() void {
             proc.trapframe.?.a0 = @bitCast(writeSys(proc));
         },
         SYSCALL_OPEN => {
-            proc.trapframe.?.a0 = @bitCast(openSys(proc));
+            proc.trapframe.?.a0 = @bitCast(openSys(proc) catch -1);
         },
         SYSCALL_MAKE_NODE => {
             proc.trapframe.?.a0 = @bitCast(makedNodeSys(proc));
         },
-        SYSCALL_CLOSE => closeSys(proc),
+        SYSCALL_MKDIR => {
+            proc.trapframe.?.a0 = @bitCast(mkdirSys(proc) catch -1);
+        },
         else => {
             lib.printf("address: 0x{x}\nsyscall_num: {}\n", .{ proc.trapframe.?.epc, syscall_num });
             lib.kpanic("Unknown syscall");
@@ -257,6 +264,31 @@ fn statSys(proc: *Process) i64 {
     }
     return -1;
 }
+
+fn chdirSys(proc: *Process) !i64 {
+    const S = struct {
+        var path_buff = [_]u8{0} ** MAX_PATH;
+    };
+    Log.beginTx();
+    defer Log.endTx();
+
+    const path_user_address = proc.trapframe.?.a0;
+
+    try proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH);
+
+    const inode = try INodeTable.getNamedInode(@ptrCast(&S.path_buff));
+
+    inode.lock();
+    defer inode.release();
+    errdefer INodeTable.removeRefAndRelease(inode);
+    if (inode.disk_inode.typ != fs.INODE_DIR) {
+        return error.PathNotDir;
+    }
+
+    INodeTable.removeRef(proc.cwd);
+    return 0;
+}
+
 fn sbrkSys(proc: *Process) i64 {
     const size: i64 = @bitCast(proc.trapframe.?.a0);
     const old_brk = proc.mem_size;
@@ -296,7 +328,21 @@ fn makedNodeSys(proc: *Process) i64 {
     return 0;
 }
 
-fn closeSys(proc: *Process) void {
+fn mkdirSys(proc: *Process) !i64 {
+    const S = struct {
+        var path_buff = [_]u8{0} ** MAX_PATH;
+    };
+    Log.beginTx();
+    defer Log.endTx();
+
+    const path_user_address = proc.trapframe.?.a0;
+
+    try proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH);
+    const inode = try INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_DIR, 0, 0);
+    INodeTable.removeRefAndRelease(inode);
+    Flags.activate(.MKDIR_HEY);
+    return 0;
+}
     const fd = proc.trapframe.?.a0;
     if (proc.open_files[fd]) |file| {
         FileTable.free(file);
