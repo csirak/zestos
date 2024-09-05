@@ -84,6 +84,9 @@ pub fn doSyscall() void {
         SYSCALL_MKDIR => {
             proc.trapframe.?.a0 = @bitCast(mkdirSys(proc) catch -1);
         },
+        SYSCALL_CLOSE => {
+            proc.trapframe.?.a0 = @bitCast(closeSys(proc));
+        },
         else => {
             lib.printf("address: 0x{x}\nsyscall_num: {}\n", .{ proc.trapframe.?.epc, syscall_num });
             lib.kpanic("Unknown syscall");
@@ -149,10 +152,7 @@ fn execSys(proc: *Process) !i64 {
         var path_buff = [_]u8{0} ** MAX_PATH;
     };
 
-    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch |e| {
-        lib.printf("error: {}\n", .{e});
-        lib.kpanic("Failed to copy path from user to kernel");
-    };
+    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch return -1;
 
     var argv = [_]?[*:0]u8{null} ** Process.MAX_ARGS;
 
@@ -178,7 +178,7 @@ fn execSys(proc: *Process) !i64 {
     return exec(@ptrCast(&S.path_buff), argv) catch -1;
 }
 
-fn openSys(proc: *Process) i64 {
+fn openSys(proc: *Process) !i64 {
     const S = struct {
         var path_buff = [_]u8{0} ** MAX_PATH;
     };
@@ -193,33 +193,24 @@ fn openSys(proc: *Process) i64 {
     };
 
     const mode = proc.trapframe.?.a1;
-    const inode = inode: {
-        if (mode & File.O_CREATE != 0) {
-            break :inode INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_FILE, 0, 0) catch {
-                return -1;
-            };
-        } else {
-            const file_inode = INodeTable.getNamedInode(@ptrCast(&S.path_buff)) catch {
-                return -1;
-            };
-            file_inode.lock();
-            if (file_inode.disk_inode.typ == fs.INODE_DIR and mode != File.O_RDONLY) {
-                INodeTable.removeRefAndRelease(file_inode);
-                return -1;
-            }
-            break :inode file_inode;
+    const inode = if (mode & File.O_CREATE != 0)
+        try INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_FILE, 0, 0)
+    else inode: {
+        const file_inode = try INodeTable.getNamedInode(@ptrCast(&S.path_buff));
+        errdefer INodeTable.removeRefAndRelease(file_inode);
+        file_inode.lock();
+        if (file_inode.disk_inode.typ == fs.INODE_DIR and mode != File.O_RDONLY) {
+            return error.NotDirectory;
         }
+        break :inode file_inode;
     };
+
+    errdefer INodeTable.removeRefAndRelease(inode);
     if (inode.disk_inode.typ == fs.INODE_DEVICE and inode.disk_inode.major >= fs.NUM_DEVICES) {
-        INodeTable.removeRefAndRelease(inode);
-        return -1;
+        return error.DeviceNotFound;
     }
     const file = FileTable.alloc();
-    const fd = proc.fileDescriptorAlloc(file) catch {
-        INodeTable.removeRefAndRelease(inode);
-        lib.println("No file descriptor available");
-        return -1;
-    };
+    const fd = try proc.fileDescriptorAlloc(file);
 
     file.readable = (mode & File.O_WRONLY) == 0;
     file.writable = (mode & File.O_WRONLY) != 0 or (mode & File.O_RDWR) != 0;
@@ -340,12 +331,15 @@ fn mkdirSys(proc: *Process) !i64 {
     try proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH);
     const inode = try INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_DIR, 0, 0);
     INodeTable.removeRefAndRelease(inode);
-    Flags.activate(.MKDIR_HEY);
     return 0;
 }
+
+fn closeSys(proc: *Process) i64 {
     const fd = proc.trapframe.?.a0;
     if (proc.open_files[fd]) |file| {
         FileTable.free(file);
+        proc.open_files[fd] = null;
+        return 0;
     }
-    proc.open_files[fd] = null;
+    return -1;
 }

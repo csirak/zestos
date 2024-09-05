@@ -68,7 +68,7 @@ pub fn strCopyNullTerm(dst: []u8, src: [*:0]u8, size: u64) void {
 
 pub fn strEq(a: [*]u8, b: [*]const u8, size: u64) bool {
     for (0..size) |i| {
-        if (a[i] & b[i] == 0) {
+        if (a[i] == 0 and b[i] == 0) {
             return true;
         }
         if (a[i] != b[i]) {

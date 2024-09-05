@@ -23,7 +23,7 @@ pub fn init() void {
 }
 
 pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
-    var name: [fs.DIR_NAME_SIZE]u8 = undefined;
+    var name = [_]u8{0} ** fs.DIR_NAME_SIZE;
     const parent = getWithPath(@ptrCast(path), true, @ptrCast(&name)) catch |e| {
         lib.printf("error: {}\n", .{e});
         return error.ParentDirDoesntExist;
@@ -211,7 +211,7 @@ fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
         i += 1;
     }
 
-    const size = if (i - start > fs.DIR_NAME_SIZE) fs.DIR_NAME_SIZE else i - start;
+    const size = @min(i - start, fs.DIR_NAME_SIZE);
     @memcpy(name[0..size], path[start..(start + size)]);
     name[size] = 0;
     return i;
@@ -221,6 +221,7 @@ fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
     if (dir.disk_inode.typ != fs.INODE_DIR) {
         return null;
     }
+
     var offset: u64 = 0;
     var entry: fs.DirEntry = undefined;
 
