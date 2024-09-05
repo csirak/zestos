@@ -23,6 +23,7 @@ pub const SYSCALL_STAT = 8;
 pub const SYSCALL_CHDIR = 9;
 pub const SYSCALL_DUP = 10;
 pub const SYSCALL_SBRK = 12;
+pub const SYSCALL_GETPID = 13;
 pub const SYSCALL_OPEN = 15;
 pub const SYSCALL_WRITE = 16;
 pub const SYSCALL_MAKE_NODE = 17;
@@ -68,6 +69,9 @@ pub fn doSyscall() void {
         },
         SYSCALL_DUP => {
             proc.trapframe.?.a0 = @bitCast(dupSys(proc));
+        },
+        SYSCALL_GETPID => {
+            proc.trapframe.?.a0 = proc.getPid();
         },
         SYSCALL_SBRK => {
             proc.trapframe.?.a0 = @bitCast(sbrkSys(proc));
