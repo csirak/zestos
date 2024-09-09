@@ -199,3 +199,18 @@ pub fn getStat(self: *Self, stat: *Stat) void {
     stat.reference_count = self.reference_count;
     stat.size = @intCast(self.disk_inode.size);
 }
+
+pub fn isDirEmpty(self: *Self) !bool {
+    var current_offset: u32 = 2 * @sizeOf(fs.DirEntry);
+    var current_dirent: fs.DirEntry = undefined;
+    while (current_offset < self.disk_inode.size) : (current_offset += @sizeOf(fs.DirEntry)) {
+        const read_bytes = try self.readToAddress(@intFromPtr(&current_dirent), @intCast(current_offset), @sizeOf(fs.DirEntry), false);
+        if (read_bytes != @sizeOf(fs.DirEntry)) {
+            lib.kpanic("Dirent misaligned bytes");
+        }
+        if (current_dirent.inum != 0) {
+            return false;
+        }
+    }
+    return true;
+}

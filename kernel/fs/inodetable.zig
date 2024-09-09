@@ -217,7 +217,7 @@ fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
     return i;
 }
 
-fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
+pub fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
     if (dir.disk_inode.typ != fs.INODE_DIR) {
         return null;
     }

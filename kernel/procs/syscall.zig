@@ -1,6 +1,9 @@
+const std = @import("std");
+
 const fs = @import("../fs/fs.zig");
 const lib = @import("../lib.zig");
 const riscv = @import("../riscv.zig");
+
 const Process = @import("proc.zig");
 const Timer = @import("../timer.zig");
 
@@ -31,6 +34,8 @@ pub const SYSCALL_UPTIME = 14;
 pub const SYSCALL_OPEN = 15;
 pub const SYSCALL_WRITE = 16;
 pub const SYSCALL_MAKE_NODE = 17;
+pub const SYSCALL_UNLINK = 18;
+pub const SYSCALL_LINK = 19;
 pub const SYSCALL_MKDIR = 20;
 pub const SYSCALL_CLOSE = 21;
 
@@ -94,6 +99,12 @@ pub fn doSyscall() void {
         },
         SYSCALL_MAKE_NODE => {
             proc.trapframe.?.a0 = @bitCast(makedNodeSys(proc));
+        },
+        SYSCALL_UNLINK => {
+            proc.trapframe.?.a0 = @bitCast(unlinkSys(proc) catch -1);
+        },
+        SYSCALL_LINK => {
+            proc.trapframe.?.a0 = @bitCast(linkSys(proc) catch -1);
         },
         SYSCALL_MKDIR => {
             proc.trapframe.?.a0 = @bitCast(mkdirSys(proc) catch -1);
@@ -345,6 +356,99 @@ fn makedNodeSys(proc: *Process) i64 {
         return -1;
     };
     INodeTable.removeRefAndRelease(inode);
+    return 0;
+}
+
+fn unlinkSys(proc: *Process) !i64 {
+    const S = struct {
+        var name_path_buff = [_]u8{0} ** fs.DIR_NAME_SIZE;
+        var path_buff = [_]u8{0} ** MAX_PATH;
+    };
+    try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.path_buff), MAX_PATH);
+
+    Log.beginTx();
+    defer Log.endTx();
+
+    var parent = try INodeTable.getWithPath(@ptrCast(&S.path_buff), true, @ptrCast(&S.name_path_buff));
+    parent.lock();
+    defer INodeTable.removeRefAndRelease(parent);
+
+    if (lib.strEq(@ptrCast(&S.name_path_buff), ".", fs.DIR_NAME_SIZE) or lib.strEq(@ptrCast(&S.name_path_buff), "..", fs.DIR_NAME_SIZE)) {
+        return error.InvalidUnlink;
+    }
+
+    var offset: u16 = 0;
+    const target_inode = INodeTable.dirLookUp(parent, @ptrCast(&S.name_path_buff), &offset) orelse return error.TargetNotFoundInDir;
+    target_inode.lock();
+    errdefer INodeTable.removeRefAndRelease(target_inode);
+
+    if (target_inode.reference_count < 1) {
+        return error.InvalidReferenceCount;
+    }
+
+    if (target_inode.disk_inode.typ == fs.INODE_DIR and !(try target_inode.isDirEmpty())) {
+        return error.DirInodeNotEmpty;
+    }
+
+    const empty_dirent = std.mem.zeroes(fs.DirEntry);
+    const write_bytes = try parent.writeTo(@intFromPtr(&empty_dirent), @intCast(offset), @sizeOf(fs.DirEntry), false);
+
+    if (write_bytes != @sizeOf(fs.DirEntry)) {
+        return error.InvalidDirEntDelete;
+    }
+
+    if (target_inode.disk_inode.typ == fs.INODE_DIR) {
+        parent.disk_inode.num_links -= 1;
+        INodeTable.update(parent);
+    }
+    target_inode.disk_inode.num_links -= 1;
+    INodeTable.update(target_inode);
+
+    return 0;
+}
+
+fn linkSys(proc: *Process) !i64 {
+    const S = struct {
+        var name_path_buff = [_]u8{0} ** fs.DIR_NAME_SIZE;
+        var new_path_buff = [_]u8{0} ** MAX_PATH;
+        var old_path_buff = [_]u8{0} ** MAX_PATH;
+    };
+    try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.old_path_buff), MAX_PATH);
+    try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a1, @ptrCast(&S.new_path_buff), MAX_PATH);
+
+    Log.beginTx();
+    defer Log.endTx();
+
+    const inode = try INodeTable.getNamedInode(@ptrCast(&S.old_path_buff));
+    inode.lock();
+
+    if (inode.disk_inode.typ == fs.INODE_DIR) {
+        INodeTable.removeRefAndRelease(inode);
+        return -1;
+    }
+
+    inode.reference_count += 1;
+    INodeTable.update(inode);
+    inode.release();
+    errdefer {
+        inode.lock();
+        inode.reference_count -= 1;
+        INodeTable.update(inode);
+        INodeTable.removeRefAndRelease(inode);
+    }
+
+    const parent = try INodeTable.getWithPath(@ptrCast(&S.new_path_buff), true, @ptrCast(&S.name_path_buff));
+    parent.lock();
+    defer INodeTable.removeRefAndRelease(parent);
+
+    if (parent.device != inode.device) {
+        return -1;
+    }
+    try INodeTable.dirLink(parent, @ptrCast(&S.name_path_buff), inode.inum);
+
+    // on line 389 only release this closes
+    INodeTable.removeRef(inode);
+
     return 0;
 }
 
