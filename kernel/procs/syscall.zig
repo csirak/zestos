@@ -27,6 +27,7 @@ pub const SYSCALL_DUP = 10;
 pub const SYSCALL_GETPID = 11;
 pub const SYSCALL_SBRK = 12;
 pub const SYSCALL_SLEEP = 13;
+pub const SYSCALL_UPTIME = 14;
 pub const SYSCALL_OPEN = 15;
 pub const SYSCALL_WRITE = 16;
 pub const SYSCALL_MAKE_NODE = 17;
@@ -75,6 +76,9 @@ pub fn doSyscall() void {
         },
         SYSCALL_GETPID => {
             proc.trapframe.?.a0 = proc.getPid();
+        },
+        SYSCALL_UPTIME => {
+            proc.trapframe.?.a0 = Timer.getTick();
         },
         SYSCALL_SBRK => {
             proc.trapframe.?.a0 = @bitCast(sbrkSys(proc));
