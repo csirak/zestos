@@ -2,6 +2,8 @@ const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
 const fs = @import("fs/fs.zig");
 
+const Timer = @import("timer.zig");
+
 const KMem = @import("mem/kmem.zig");
 const PageTable = @import("mem/pagetable.zig");
 const mem = @import("mem/mem.zig");
@@ -16,17 +18,12 @@ const UART = @import("io/uart.zig");
 
 const Interrupt = enum { Timer, Software, External, Syscall, Breakpoint, Unknown };
 
-var ticks: u64 = 0;
-var tickslock: Spinlock = undefined;
 var first_ret = true;
 
 extern fn kernelvec() void;
 extern fn uservec() void;
 extern fn userret() void;
 extern fn trampoline() void;
-pub fn init() void {
-    tickslock = Spinlock.init("time");
-}
 
 pub fn coreInit() void {
     riscv.w_stvec(@intFromPtr(&kernelvec));
@@ -212,8 +209,6 @@ inline fn clockInterrupt() void {
         return;
     }
 
-    tickslock.acquire();
-    defer tickslock.release();
-    ticks += 1;
-    Process.wakeup(&ticks);
+    Timer.tick();
+    Process.wakeup(&Timer.ticks);
 }

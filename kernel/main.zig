@@ -2,6 +2,7 @@ const lib = @import("lib.zig");
 const riscv = @import("riscv.zig");
 const Device = @import("device.zig");
 const Traps = @import("trap.zig");
+const Timer = @import("timer.zig");
 
 const Process = @import("procs/proc.zig");
 const KMem = @import("mem/kmem.zig");
@@ -29,7 +30,7 @@ pub export fn main() void {
 
         Process.init();
 
-        Traps.init();
+        Timer.init();
         Traps.coreInit();
 
         Plic.init();

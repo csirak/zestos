@@ -2,6 +2,7 @@ const fs = @import("../fs/fs.zig");
 const lib = @import("../lib.zig");
 const riscv = @import("../riscv.zig");
 const Process = @import("proc.zig");
+const Timer = @import("../timer.zig");
 
 const KMem = @import("../mem/kmem.zig");
 
@@ -10,6 +11,7 @@ const Pipe = @import("../fs/pipe.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 const FileTable = @import("../fs/filetable.zig");
 const Log = @import("../fs/log.zig");
+const Traps = @import("../trap.zig");
 
 const exec = @import("exec.zig").exec;
 
