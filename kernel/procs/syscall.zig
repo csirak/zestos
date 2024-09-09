@@ -24,8 +24,9 @@ pub const SYSCALL_EXEC = 7;
 pub const SYSCALL_STAT = 8;
 pub const SYSCALL_CHDIR = 9;
 pub const SYSCALL_DUP = 10;
+pub const SYSCALL_GETPID = 11;
 pub const SYSCALL_SBRK = 12;
-pub const SYSCALL_GETPID = 13;
+pub const SYSCALL_SLEEP = 13;
 pub const SYSCALL_OPEN = 15;
 pub const SYSCALL_WRITE = 16;
 pub const SYSCALL_MAKE_NODE = 17;
@@ -77,6 +78,9 @@ pub fn doSyscall() void {
         },
         SYSCALL_SBRK => {
             proc.trapframe.?.a0 = @bitCast(sbrkSys(proc));
+        },
+        SYSCALL_SLEEP => {
+            proc.trapframe.?.a0 = @bitCast(sleepSys(proc));
         },
         SYSCALL_WRITE => {
             proc.trapframe.?.a0 = @bitCast(writeSys(proc));
@@ -294,6 +298,21 @@ fn sbrkSys(proc: *Process) i64 {
         return -1;
     };
     return @intCast(old_brk);
+}
+
+fn sleepSys(proc: *Process) i64 {
+    const time = proc.trapframe.?.a0;
+    const ticks0 = Timer.getTick();
+    Timer.lock.acquire();
+    defer Timer.lock.release();
+
+    while (Timer.getTick() - ticks0 < time) {
+        if (proc.isKilled()) {
+            return -1;
+        }
+        proc.sleep(&Timer.ticks, &Timer.lock);
+    }
+    return 0;
 }
 
 fn writeSys(proc: *Process) i64 {
