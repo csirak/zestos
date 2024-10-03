@@ -31,6 +31,11 @@ pub fn userFree(self: *Self, size: u64) !void {
         try self.unMapPages(0, num_pages, true);
     }
     try freeTable(self.table);
+    self.table = undefined;
+}
+
+pub fn isInit(self: *Self) bool {
+    return self.table != undefined;
 }
 
 pub fn getPageTableEntry(self: *Self, virtual_address: u64, alloc: bool) !*u64 {
@@ -229,13 +234,13 @@ pub inline fn getAsSatp(self: *Self) u64 {
     return mem.MAKE_SATP(@intFromPtr(self.table));
 }
 
+pub inline fn pageTableEntryToPhysAddr(pte: u64) *u64 {
+    return @ptrFromInt((pte >> PTE_FLAGS_SIZE) << PG_OFFSET_SIZE);
+}
+
 inline fn pageTableLevelIndex(address: u64, level: u6) u64 {
     const shift_depth: u6 = PT_INDEX_SIZE * level + PG_OFFSET_SIZE;
     return (address >> shift_depth) & PX_MASK;
-}
-
-pub inline fn pageTableEntryToPhysAddr(pte: u64) *u64 {
-    return @ptrFromInt((pte >> PTE_FLAGS_SIZE) << PG_OFFSET_SIZE);
 }
 
 inline fn pageTableEntryFlags(pte: u64) u64 {

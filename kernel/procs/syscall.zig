@@ -39,14 +39,12 @@ pub const SYSCALL_LINK = 19;
 pub const SYSCALL_MKDIR = 20;
 pub const SYSCALL_CLOSE = 21;
 
-const MAX_PATH = 128;
-
 pub fn doSyscall() void {
     const proc = Process.currentOrPanic();
     const syscall_num = proc.trapframe.?.a7;
     switch (syscall_num) {
         SYSCALL_FORK => proc.trapframe.?.a0 = proc.fork() catch {
-            lib.kpanic("Failed to fork");
+            @panic("Failed to fork");
         },
         SYSCALL_EXIT => proc.exit(@intCast(proc.trapframe.?.a0)),
         SYSCALL_WAIT => {
@@ -174,7 +172,7 @@ fn execSys(proc: *Process) !i64 {
     const path_user_address = proc.trapframe.?.a0;
     const argv_user_address = proc.trapframe.?.a1;
     const S = struct {
-        var path_buff = [_]u8{0} ** MAX_PATH;
+        var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
 
     proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch return -1;
@@ -205,7 +203,7 @@ fn execSys(proc: *Process) !i64 {
 
 fn openSys(proc: *Process) !i64 {
     const S = struct {
-        var path_buff = [_]u8{0} ** MAX_PATH;
+        var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     Log.beginTx();
     defer Log.endTx();
@@ -283,7 +281,7 @@ fn statSys(proc: *Process) i64 {
 
 fn chdirSys(proc: *Process) !i64 {
     const S = struct {
-        var path_buff = [_]u8{0} ** MAX_PATH;
+        var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     Log.beginTx();
     defer Log.endTx();
@@ -340,7 +338,7 @@ fn writeSys(proc: *Process) i64 {
 
 fn makedNodeSys(proc: *Process) i64 {
     const S = struct {
-        var path_buff = [_]u8{0} ** MAX_PATH;
+        var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     const path_user_address = proc.trapframe.?.a0;
     proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch |e| {
@@ -362,7 +360,7 @@ fn makedNodeSys(proc: *Process) i64 {
 fn unlinkSys(proc: *Process) !i64 {
     const S = struct {
         var name_path_buff = [_]u8{0} ** fs.DIR_NAME_SIZE;
-        var path_buff = [_]u8{0} ** MAX_PATH;
+        var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.path_buff), MAX_PATH);
 
@@ -378,7 +376,7 @@ fn unlinkSys(proc: *Process) !i64 {
     }
 
     var offset: u16 = 0;
-    const target_inode = INodeTable.dirLookUp(parent, @ptrCast(&S.name_path_buff), &offset) orelse return error.TargetNotFoundInDir;
+    const target_inode = INodeTable.dirLookUp(parent, &S.name_path_buff, &offset) orelse return error.TargetNotFoundInDir;
     target_inode.lock();
     errdefer INodeTable.removeRefAndRelease(target_inode);
 
@@ -410,8 +408,8 @@ fn unlinkSys(proc: *Process) !i64 {
 fn linkSys(proc: *Process) !i64 {
     const S = struct {
         var name_path_buff = [_]u8{0} ** fs.DIR_NAME_SIZE;
-        var new_path_buff = [_]u8{0} ** MAX_PATH;
-        var old_path_buff = [_]u8{0} ** MAX_PATH;
+        var new_path_buff = [_]u8{0} ** fs.MAX_PATH;
+        var old_path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.old_path_buff), MAX_PATH);
     try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a1, @ptrCast(&S.new_path_buff), MAX_PATH);
@@ -444,7 +442,7 @@ fn linkSys(proc: *Process) !i64 {
     if (parent.device != inode.device) {
         return -1;
     }
-    try INodeTable.dirLink(parent, @ptrCast(&S.name_path_buff), inode.inum);
+    try INodeTable.dirLink(parent, &S.name_path_buff, inode.inum);
 
     // on line 389 only release this closes
     INodeTable.removeRef(inode);
@@ -454,7 +452,7 @@ fn linkSys(proc: *Process) !i64 {
 
 fn mkdirSys(proc: *Process) !i64 {
     const S = struct {
-        var path_buff = [_]u8{0} ** MAX_PATH;
+        var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     Log.beginTx();
     defer Log.endTx();

@@ -177,8 +177,7 @@ pub fn free(self: *Self) !void {
     if (self.trapframe) |trapframe| KMem.free(@intFromPtr(trapframe));
     self.trapframe = null;
 
-    if (self.pagetable) |*pagetable| try pagetable.*.userFree(self.mem_size);
-    self.pagetable = null;
+    if (self.pagetable.isInit()) try self.pagetable.userFree(self.mem_size);
 
     self.mem_size = 0;
     self.pid = 0;
@@ -438,10 +437,6 @@ pub fn scheduler() void {
             proc.lock.release();
         }
     }
-}
-
-pub fn copyToUser(dest: u64, src: *[]u8, size: u64) !void {
-    try currentOrPanic().pagetable.?.copyInto(dest, src, size);
 }
 
 /// not a struct function because for now it's used by the scheduler because

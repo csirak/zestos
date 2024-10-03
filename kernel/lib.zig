@@ -60,13 +60,13 @@ pub fn strCopy(dst: []u8, src: []const u8, size: u64) void {
     }
 }
 
-pub fn strCopyNullTerm(dst: []u8, src: [*:0]u8, size: u64) void {
+pub fn strCopyNullTerm(dst: [*]u8, src: [*]u8, size: u64) void {
     for (0..size) |i| {
         dst[i] = src[i];
     }
 }
 
-pub fn strEq(a: [*]u8, b: [*]const u8, size: u64) bool {
+pub fn strEq(a: [*]const u8, b: [*]const u8, size: u64) bool {
     for (0..size) |i| {
         if (a[i] == 0 and b[i] == 0) {
             return true;

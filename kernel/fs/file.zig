@@ -1,3 +1,5 @@
+const std = @import("std");
+const fs = @import("fs.zig");
 const INode = @import("inode.zig");
 const Pipe = @import("pipe.zig");
 const Device = @import("../device.zig");
@@ -102,7 +104,7 @@ pub fn getInode(self: *Self) *INode {
 
 pub fn getStat(self: *Self, addr: u64) !i64 {
     const proc = Process.currentOrPanic();
-    var stat: INode.Stat = undefined;
+    var stat = std.mem.zeroes(INode.Stat);
     switch (self.data) {
         .inode_file, .device => {},
         else => @panic("invalid file type getStat"),

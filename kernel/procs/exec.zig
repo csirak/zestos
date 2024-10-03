@@ -16,7 +16,6 @@ const INodeTable = @import("../fs/inodetable.zig");
 
 pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     Log.beginTx();
-
     const inode = try INodeTable.getNamedInode(path);
     inode.lock();
     defer INodeTable.removeRefAndRelease(inode);

@@ -1,3 +1,4 @@
+const std = @import("std");
 const fs = @import("fs.zig");
 const lib = @import("../lib.zig");
 const riscv = @import("../riscv.zig");
@@ -30,7 +31,7 @@ pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
     };
     parent.lock();
 
-    if (dirLookUp(parent, @ptrCast(&name), null)) |target| {
+    if (dirLookUp(parent, &name, null)) |target| {
         removeRefAndRelease(parent);
         target.lock();
         if (typ == fs.INODE_FILE and (target.disk_inode.typ == fs.INODE_DEVICE or target.disk_inode.typ == fs.INODE_FILE)) {
@@ -63,7 +64,7 @@ pub fn create(path: [*]u8, typ: u16, major: u16, minor: u16) !*INode {
         try dirLink(create_inode, @constCast(@ptrCast(DOTDOT)), parent.inum);
     }
 
-    try dirLink(parent, @ptrCast(&name), create_inode.inum);
+    try dirLink(parent, &name, create_inode.inum);
 
     if (typ == fs.INODE_DIR) {
         // for the .. ref
@@ -130,11 +131,11 @@ pub fn get(device: u16, inum: u16) *INode {
     lib.kpanic("No empty inode");
 }
 
-pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode {
+pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: *[fs.DIR_NAME_SIZE]u8) !*INode {
     var current = if (path[0] == '/') get(fs.ROOT_DEVICE, fs.ROOT_INODE) else duplicate(Process.currentOrPanic().cwd);
     var rest: u16 = getNextPathElem(path, name, 0);
 
-    while (rest < fs.DIR_NAME_SIZE) {
+    while (rest < fs.MAX_PATH) {
         current.lock();
         if (current.disk_inode.typ != fs.INODE_DIR) {
             removeRef(current);
@@ -146,6 +147,7 @@ pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode
             current.release();
             return current;
         }
+
         const new_inode = dirLookUp(current, name, null) orelse {
             removeRef(current);
             current.release();
@@ -174,7 +176,7 @@ pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: [*:0]u8) !*INode
 
 pub fn getNamedInode(path: [*:0]const u8) !*INode {
     const Static = struct {
-        var name: [fs.DIR_NAME_SIZE:0]u8 = undefined;
+        var name = [_]u8{0} ** fs.DIR_NAME_SIZE;
     };
     return try getWithPath(path, false, &Static.name);
 }
@@ -197,7 +199,7 @@ pub fn removeRefAndRelease(inode: *INode) void {
     removeRef(inode);
 }
 
-fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
+fn getNextPathElem(path: [*:0]const u8, name: *[fs.DIR_NAME_SIZE]u8, cur_offset: u16) u16 {
     var i: u16 = cur_offset;
     while (path[i] == '/') : (i += 1) {}
 
@@ -212,24 +214,24 @@ fn getNextPathElem(path: [*:0]const u8, name: [*:0]u8, cur_offset: u16) u16 {
     }
 
     const size = @min(i - start, fs.DIR_NAME_SIZE);
-    @memcpy(name[0..size], path[start..(start + size)]);
-    name[size] = 0;
+
+    @memset(name, 0);
+    @memcpy(name[0..size], path[start..][0..size]);
+
     return i;
 }
 
-pub fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
+pub fn dirLookUp(dir: *INode, name: *[fs.DIR_NAME_SIZE]u8, put_offset: ?*u16) ?*INode {
     if (dir.disk_inode.typ != fs.INODE_DIR) {
         return null;
     }
 
     var offset: u64 = 0;
-    var entry: fs.DirEntry = undefined;
+    var entry = std.mem.zeroes(fs.DirEntry);
 
     while (offset < dir.disk_inode.size) : (offset += @sizeOf(fs.DirEntry)) {
-        _ = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch |e| {
-            lib.printf("error: {}\n", .{e});
-            return null;
-        };
+        _ = dir.readToAddress(@intFromPtr(&entry), offset, @sizeOf(fs.DirEntry), false) catch return null;
+
         if (entry.inum == 0) {
             continue;
         }
@@ -245,7 +247,7 @@ pub fn dirLookUp(dir: *INode, name: [*:0]u8, put_offset: ?*u16) ?*INode {
     return null;
 }
 
-pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) !void {
+pub fn dirLink(dir: *INode, name: *[fs.DIR_NAME_SIZE]u8, inum: u16) !void {
     const check_exists = dirLookUp(dir, @ptrCast(name), null);
     if (check_exists) |_| {
         return;
@@ -266,7 +268,7 @@ pub fn dirLink(dir: *INode, name: [*]u8, inum: u16) !void {
             break;
         }
     }
-    lib.strCopyNullTerm(&entry.name, @ptrCast(name), fs.DIR_NAME_SIZE);
+    lib.strCopyNullTerm(&entry.name, name, fs.DIR_NAME_SIZE);
     entry.inum = inum;
     _ = try dir.writeTo(
         @intFromPtr(&entry),

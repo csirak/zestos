@@ -93,7 +93,7 @@ pub fn userTrapReturn() noreturn {
     riscv.w_sstatus(user_sstatus);
 
     riscv.w_sepc(proc.trapframe.?.epc);
-    const satp = proc.pagetable.?.getAsSatp();
+    const satp = proc.pagetable.getAsSatp();
 
     const user_ret_trampoline = riscv.TRAMPOLINE + @intFromPtr(&userret) - @intFromPtr(&trampoline);
     const user_ret: *const fn (u64) noreturn = @ptrFromInt(user_ret_trampoline);

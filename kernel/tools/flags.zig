@@ -1,6 +1,4 @@
-const Handles = enum {
-    MKDIR_HEY,
-};
+const Handles = enum {};
 
 var active_handles = [_]bool{false} ** @typeInfo(Handles).Enum.fields.len;
 

@@ -43,6 +43,7 @@ pub const BITS_PER_BLOCK = 8 * BLOCK_SIZE;
 pub const MAX_BLOCKS_PER_OP = 10;
 pub const NUM_LOG_BLOCKS = 3 * MAX_BLOCKS_PER_OP;
 pub const BUFFER_CACHE_SIZE = 3 * MAX_BLOCKS_PER_OP;
+pub const MAX_PATH = 128;
 
 pub const DIRECT_ADDRESS_SIZE = 12;
 pub const INDIRECT_ADDRESS_SIZE = @divExact(BLOCK_SIZE, @sizeOf(u32));
