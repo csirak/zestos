@@ -121,7 +121,7 @@ parent: *Self,
 // private to proc lock not needed
 kstackPtr: u64,
 mem_size: u64,
-pagetable: ?PageTable,
+pagetable: PageTable,
 cwd: *INode,
 open_files: [fs.MAX_OPEN_FILES]?*File,
 trapframe: ?*TrapFrame,
@@ -233,7 +233,7 @@ pub fn yield(self: *Self) void {
 
 pub fn fork(self: *Self) !u64 {
     const newProc = try alloc();
-    self.pagetable.?.copy(&newProc.pagetable.?, self.mem_size) catch |e| {
+    self.pagetable.copy(&newProc.pagetable, self.mem_size) catch |e| {
         newProc.free() catch unreachable;
         newProc.lock.release();
         return e;
@@ -299,13 +299,13 @@ pub fn resizeMem(self: *Self, change: i64) !void {
 
     // TODO: check if change is valid
     if (change > 0) {
-        self.mem_size = try self.pagetable.?.userAlloc(
+        self.mem_size = try self.pagetable.userAlloc(
             old_size,
             new_size,
             mem.PTE_W,
         );
     } else {
-        self.mem_size = try self.pagetable.?.userDeAlloc(
+        self.mem_size = try self.pagetable.userDeAlloc(
             self.mem_size,
             new_size,
         );
@@ -403,7 +403,7 @@ pub fn userInit() !void {
     init_proc = proc;
     // allocate code memory
     const page: *riscv.Page = @ptrCast(try KMem.allocZeroed());
-    try proc.pagetable.?.mapPages(
+    try proc.pagetable.mapPages(
         0,
         @intFromPtr(page),
         riscv.PGSIZE,

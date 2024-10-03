@@ -160,7 +160,7 @@ fn pipeSys(proc: *Process) !i64 {
         lib.kpanic("Failed to copy path from user to kernel");
     };
 
-    try proc.pagetable.?.copyInto(
+    try proc.pagetable.copyInto(
         fd_array_user_ptr,
         @ptrCast(&file_descriptors),
         @sizeOf(@TypeOf(file_descriptors)),
@@ -175,20 +175,20 @@ fn execSys(proc: *Process) !i64 {
         var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
 
-    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch return -1;
+    proc.pagetable.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), fs.MAX_PATH) catch return -1;
 
     var argv = [_]?[*:0]u8{null} ** Process.MAX_ARGS;
 
     for (0..Process.MAX_ARGS) |i| {
         var cur_arg: u64 = undefined;
-        try proc.pagetable.?.copyFrom(argv_user_address + @sizeOf(u64) * i, @ptrCast(&cur_arg), @sizeOf(u64));
+        try proc.pagetable.copyFrom(argv_user_address + @sizeOf(u64) * i, @ptrCast(&cur_arg), @sizeOf(u64));
         if (cur_arg == 0) {
             argv[i] = null;
             break;
         }
 
         const arg_ptr: [*:0]u8 = @ptrCast(try KMem.alloc());
-        try proc.pagetable.?.copyStringFromUser(cur_arg, @ptrCast(arg_ptr), riscv.PGSIZE);
+        try proc.pagetable.copyStringFromUser(cur_arg, @ptrCast(arg_ptr), riscv.PGSIZE);
         argv[i] = arg_ptr;
     }
 
@@ -210,7 +210,7 @@ fn openSys(proc: *Process) !i64 {
 
     const path_user_address = proc.trapframe.?.a0;
 
-    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch |e| {
+    proc.pagetable.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), fs.MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
@@ -288,7 +288,7 @@ fn chdirSys(proc: *Process) !i64 {
 
     const path_user_address = proc.trapframe.?.a0;
 
-    try proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH);
+    try proc.pagetable.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), fs.MAX_PATH);
 
     const inode = try INodeTable.getNamedInode(@ptrCast(&S.path_buff));
 
@@ -344,7 +344,7 @@ fn makedNodeSys(proc: *Process) i64 {
         var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     const path_user_address = proc.trapframe.?.a0;
-    proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH) catch |e| {
+    proc.pagetable.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), fs.MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
@@ -365,7 +365,7 @@ fn unlinkSys(proc: *Process) !i64 {
         var name_path_buff = [_]u8{0} ** fs.DIR_NAME_SIZE;
         var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
-    try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.path_buff), MAX_PATH);
+    try proc.pagetable.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.path_buff), fs.MAX_PATH);
 
     Log.beginTx();
     defer Log.endTx();
@@ -414,8 +414,8 @@ fn linkSys(proc: *Process) !i64 {
         var new_path_buff = [_]u8{0} ** fs.MAX_PATH;
         var old_path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
-    try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.old_path_buff), MAX_PATH);
-    try proc.pagetable.?.copyStringFromUser(proc.trapframe.?.a1, @ptrCast(&S.new_path_buff), MAX_PATH);
+    try proc.pagetable.copyStringFromUser(proc.trapframe.?.a0, @ptrCast(&S.old_path_buff), fs.MAX_PATH);
+    try proc.pagetable.copyStringFromUser(proc.trapframe.?.a1, @ptrCast(&S.new_path_buff), fs.MAX_PATH);
 
     Log.beginTx();
     defer Log.endTx();
@@ -462,7 +462,7 @@ fn mkdirSys(proc: *Process) !i64 {
 
     const path_user_address = proc.trapframe.?.a0;
 
-    try proc.pagetable.?.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), MAX_PATH);
+    try proc.pagetable.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), fs.MAX_PATH);
     const inode = try INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_DIR, 0, 0);
     INodeTable.removeRefAndRelease(inode);
     return 0;

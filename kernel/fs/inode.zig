@@ -110,7 +110,7 @@ pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, use
         const bytes_offset = file_offset % fs.BLOCK_SIZE;
         var src: [*]u8 = @ptrCast(&block_buffer.data[bytes_offset]);
         if (user_space) {
-            var user_pagetable = Process.currentOrPanic().pagetable.?;
+            var user_pagetable = Process.currentOrPanic().pagetable;
             try user_pagetable.copyInto(cur_dest, src, bytes_to_write);
         } else {
             const dest_ptr: *[fs.BLOCK_SIZE]u8 = @ptrFromInt(cur_dest);

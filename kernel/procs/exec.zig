@@ -119,7 +119,7 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
 
     lib.strCopyNullTerm(&proc.name, path[last_back_slash..], Process.NAME_SIZE);
 
-    var old_pagetable = proc.pagetable.?;
+    var old_pagetable = proc.pagetable;
     proc.pagetable = pagetable;
     proc.mem_size = stack_top;
     proc.trapframe.?.epc = elf_header.entry;

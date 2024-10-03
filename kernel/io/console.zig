@@ -48,7 +48,7 @@ pub fn write(user_addr: bool, buffer_ptr: u64, size: u64) !u64 {
 
     for (0..size) |i| {
         var byte: [1]u8 = undefined;
-        if (user_addr) try proc.pagetable.?.copyFrom(buffer_ptr + i, &byte, 1) else {
+        if (user_addr) try proc.pagetable.copyFrom(buffer_ptr + i, &byte, 1) else {
             byte[0] = @as(*u8, @ptrFromInt(buffer_ptr + i)).*;
         }
         UART.bufPutc(byte[0]);
@@ -93,7 +93,7 @@ pub fn read(user_addr: bool, buffer_ptr: u64, size: u64) !u64 {
             break;
         }
         if (user_addr) {
-            try proc.pagetable.?.copyInto(buffer_ptr + cur_read, @ptrCast(&char), 1);
+            try proc.pagetable.copyInto(buffer_ptr + cur_read, @ptrCast(&char), 1);
         } else {
             @as(*u8, @ptrFromInt(buffer_ptr + cur_read)).* = char;
         }

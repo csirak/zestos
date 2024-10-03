@@ -84,7 +84,7 @@ pub fn write(self: *Self, address: u64, size: u64) i64 {
         }
 
         const write_byte_location = &self.data[self.write_bytes % PIPE_SIZE];
-        proc.pagetable.?.copyFrom(address + bytes_written, @ptrCast(write_byte_location), 1) catch return bytes_written;
+        proc.pagetable.copyFrom(address + bytes_written, @ptrCast(write_byte_location), 1) catch return bytes_written;
         self.write_bytes += 1;
         bytes_written += 1;
     }
@@ -113,7 +113,7 @@ pub fn read(self: *Self, address: u64, size: u64) i64 {
 
         const byte = self.data[self.read_bytes % PIPE_SIZE];
         self.read_bytes += 1;
-        proc.pagetable.?.copyInto(address + i, @ptrCast(&byte), 1) catch return @intCast(i);
+        proc.pagetable.copyInto(address + i, @ptrCast(&byte), 1) catch return @intCast(i);
     }
     return @intCast(size);
 }

@@ -131,6 +131,6 @@ pub fn getStat(self: *Self, addr: u64) !i64 {
     inode.lock();
     defer inode.release();
     inode.getStat(&stat);
-    try proc.pagetable.?.copyInto(addr, @ptrCast(&stat), @sizeOf(INode.Stat));
+    try proc.pagetable.copyInto(addr, @ptrCast(&stat), @sizeOf(INode.Stat));
     return 0;
 }
