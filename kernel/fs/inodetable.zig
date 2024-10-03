@@ -159,7 +159,7 @@ pub fn getWithPath(path: [*:0]const u8, get_parent: bool, name: *[fs.DIR_NAME_SI
         if (path[rest] == 0) {
             break;
         }
-        rest = getNextPathElem(path[rest..], name, rest);
+        rest = getNextPathElem(path[rest - 1 ..], name, rest);
     } else {
         current.release();
         return current;

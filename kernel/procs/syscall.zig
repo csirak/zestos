@@ -284,7 +284,7 @@ fn chdirSys(proc: *Process) !i64 {
         var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     Log.beginTx();
-    defer Log.endTx();
+    errdefer Log.endTx();
 
     const path_user_address = proc.trapframe.?.a0;
 
@@ -293,13 +293,16 @@ fn chdirSys(proc: *Process) !i64 {
     const inode = try INodeTable.getNamedInode(@ptrCast(&S.path_buff));
 
     inode.lock();
-    defer inode.release();
     errdefer INodeTable.removeRefAndRelease(inode);
     if (inode.disk_inode.typ != fs.INODE_DIR) {
         return error.PathNotDir;
     }
 
+    inode.release();
     INodeTable.removeRef(proc.cwd);
+    Log.endTx();
+
+    proc.cwd = inode;
     return 0;
 }
 

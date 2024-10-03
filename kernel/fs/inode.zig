@@ -125,7 +125,7 @@ pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, use
     return bytes_read;
 }
 
-pub fn writeTo(self: *Self, src: u64, offset: u32, size: u64, user_space: bool) !u64 {
+pub fn writeTo(self: *Self, src: u64, offset: u32, size: u64, comptime user_space: bool) !u64 {
     if (self.disk_inode.size < offset or (offset + size) < offset) {
         return error.OutOfBounds;
     }
@@ -133,36 +133,33 @@ pub fn writeTo(self: *Self, src: u64, offset: u32, size: u64, user_space: bool) 
         return error.OutOfBoundsOverflow;
     }
 
-    var block_offset = offset;
-
-    while (block_offset < size + offset) {
+    var bytes_written: u32 = 0;
+    while (bytes_written < size) {
+        const block_offset = bytes_written + offset;
         const block_num: u16 = @intCast(@divFloor(block_offset, fs.BLOCK_SIZE));
         const block_addr = self.mapBlock(block_num);
         var block_buffer = BufferCache.read(self.device, @intCast(block_addr));
         defer BufferCache.release(block_buffer);
-        const bytes_left = size - (block_offset - offset);
         const block_offset_in_block = block_offset % fs.BLOCK_SIZE;
         const bytes_left_in_block = fs.BLOCK_SIZE - block_offset_in_block;
-        const bytes_to_write = @min(bytes_left, bytes_left_in_block);
+        const bytes_to_write = @min(size - bytes_written, bytes_left_in_block);
 
+        var dest_ptr: *[fs.BLOCK_SIZE]u8 = @ptrCast(@alignCast(&block_buffer.data[block_offset_in_block]));
         if (user_space) {
-            // var user_pagetable = Process.currentOrPanic().pagetable.?;
-            // try user_pagetable.copyInto(cur_dest, &src, bytes_to_write);
-            @panic("invalid bytes");
+            try Process.currentOrPanic().pagetable.copyFrom(src, @ptrCast(dest_ptr), bytes_to_write);
         } else {
-            var dest_ptr: *[fs.BLOCK_SIZE]u8 = @ptrCast(@alignCast(&block_buffer.data[block_offset_in_block]));
-            const src_bytes: [*]u8 = @ptrFromInt(src);
+            const src_bytes: [*]u8 = @ptrFromInt(src + bytes_written);
             @memcpy(dest_ptr[0..bytes_to_write], src_bytes[0..bytes_to_write]);
         }
 
         Log.write(block_buffer);
-        block_offset += bytes_to_write;
+        bytes_written += bytes_to_write;
     }
-    if (block_offset > self.disk_inode.size) {
-        self.disk_inode.size = (block_offset);
+    if (bytes_written + offset > self.disk_inode.size) {
+        self.disk_inode.size = (bytes_written + offset);
     }
     INodeTable.update(self);
-    return block_offset - offset;
+    return bytes_written;
 }
 
 pub fn truncate(self: *Self) void {

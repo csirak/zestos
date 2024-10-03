@@ -1,11 +1,14 @@
 const std = @import("std");
 const fs = @import("fs.zig");
-const INode = @import("inode.zig");
-const Pipe = @import("pipe.zig");
-const Device = @import("../device.zig");
-const INodeTable = @import("inode.zig");
 const lib = @import("../lib.zig");
+
+const INode = @import("inode.zig");
+const Log = @import("log.zig");
+const Pipe = @import("pipe.zig");
+const INodeTable = @import("inode.zig");
+
 const Process = @import("../procs/proc.zig");
+const Device = @import("../device.zig");
 
 const Self = @This();
 
@@ -83,8 +86,23 @@ pub fn write(self: *Self, buffer_ptr: u64, size: u64) !i64 {
         .pipe => |pipe| {
             return pipe.write(buffer_ptr, size);
         },
-        .inode_file => {
-            @panic("inode file");
+        .inode_file => |*file| {
+            const max_bytes = (fs.MAX_BLOCKS_PER_OP - 1 - 1 - 2) * fs.BLOCK_SIZE / 2;
+            var bytes_written: u64 = 0;
+            while (bytes_written < size) {
+                const to_write = @min(size - bytes_written, max_bytes);
+                Log.beginTx();
+                defer Log.endTx();
+                file.inode.lock();
+                const written = try file.inode.writeTo(buffer_ptr + bytes_written, file.offset, to_write, true);
+                if (written != to_write) {
+                    return error.WriteError;
+                }
+                file.offset += @truncate(written);
+                bytes_written += written;
+                file.inode.release();
+            }
+            return @intCast(bytes_written);
         },
         .device => |info| if (Device.getDevice(info.major)) |dev| return try dev.write(true, buffer_ptr, size),
         else => {
