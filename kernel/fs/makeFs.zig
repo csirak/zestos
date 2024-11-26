@@ -37,7 +37,7 @@ pub fn makeFs(log: bool) void {
     iNodeAppend(root_inum, std.mem.asBytes(&dot), @sizeOf(fs.DirEntry));
     iNodeAppend(root_inum, std.mem.asBytes(&dotdot), @sizeOf(fs.DirEntry));
 
-    addUserPrograms("user", std.heap.page_allocator) catch |err| {
+    addUserPrograms("user/bin", std.heap.page_allocator) catch |err| {
         debug.panic("Failed to add user programs: {s}", .{@errorName(err)});
     };
 
@@ -115,7 +115,7 @@ fn iNodeAppend(inum: u16, bytes: []const u8, size: u64) void {
 
     const blocks_to_write = @divFloor(inode.size + bytes.len, fs.BLOCK_SIZE);
     if (blocks_to_write > fs.MAX_ADDRESS_SIZE) {
-        debug.panic("File offset out of bounds", .{});
+        debug.panic("File offset out of bounds with size: {}", .{bytes.len});
     }
 
     while (bytes_left > 0) {
