@@ -130,14 +130,7 @@ export fn kerneltrap() void {
     const reason = getSupervisorInterrupt(scause);
 
     if (reason == .Unknown) {
-        lib.println("");
-        Console.printf("stack: {x}\n", .{riscv.r_sp()});
-        Console.printf("stval: {x}\n", .{riscv.r_stval()});
-        Console.printf("sepc: {x}\n", .{riscv.r_sepc()});
-        Console.printf("ra: {x}\n", .{riscv.r_ra()});
-        Console.printf("a0: {x}\n", .{riscv.r_a0()});
-        Console.printf("cause: {x}\n", .{scause});
-        Console.kpanic("Unknown interrupt");
+        @panic("Unknown interrupt");
     }
 
     if (current) |proc| {
@@ -167,7 +160,7 @@ fn getSupervisorInterrupt(cause: u64) Interrupt {
     switch (flag) {
         riscv.SCAUSE_INT_SOFTWARE => {
             clockInterrupt();
-            const clear_pending_mask: u8 = 2;
+            const clear_pending_mask: u8 = 0b10;
             riscv.w_sip(riscv.r_sip() & ~clear_pending_mask);
 
             return .Timer;

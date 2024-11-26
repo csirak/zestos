@@ -126,6 +126,8 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     proc.trapframe.?.sp = sp;
 
     try old_pagetable.userFree(old_mem_size);
+
+    // returned as a0
     return @intCast(argc);
 }
 

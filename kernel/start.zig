@@ -51,6 +51,7 @@ pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     const proc = Process.current();
     if (proc) |p| {
         lib.printf("pid: {}\n", .{p.getPid()});
+        lib.printf("epc: {}\n", .{p.trapframe.?.epc});
     }
     lib.printf("stack: 0x{x}\n", .{riscv.r_sp()});
     lib.printf("stval: 0x{x}\n", .{riscv.r_stval()});

@@ -92,7 +92,7 @@ pub fn mapBlock(self: *Self, addr_index: u16) u32 {
     return new_indirect_addr;
 }
 
-pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, user_space: bool) !u32 {
+pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, comptime user_space: bool) !u32 {
     if (self.disk_inode.size < file_start) {
         return error.OutOfBounds;
     }

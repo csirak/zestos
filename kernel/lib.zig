@@ -3,7 +3,7 @@ const riscv = @import("riscv.zig");
 const Cpu = @import("cpu.zig");
 const Uart = @import("io/Uart.zig");
 
-var print_buffer = [_]u8{0} ** 4096;
+var print_buffer = [_]u8{0} ** (riscv.PGSIZE);
 var print_fba = std.heap.FixedBufferAllocator.init(&print_buffer);
 const print_allocator = print_fba.allocator();
 
