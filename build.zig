@@ -61,13 +61,18 @@ pub fn build(b: *std.Build) void {
 
     fs.makeFs(false);
 
+    userFiles(b, target) catch |e| {
+        std.debug.print("Error: {}\n", .{e});
+        @panic("err");
+    };
+
     const run_cmd_str = [_][]const u8{
         "qemu-system-riscv64",
         "-m",
         "128M",
         "-smp",
-        "4",
-        // "1",
+        // "4",
+        "1",
         "-nographic",
         "-bios",
         "none",
@@ -97,4 +102,40 @@ pub fn build(b: *std.Build) void {
 
     const debug_step = b.step("debug", "Debug the kernel");
     debug_step.dependOn(&debug_cmd.step);
+}
+
+fn userFiles(b: *std.Build, target: std.Build.ResolvedTarget) !void {
+    const user_program_path = "user";
+    const dir = try std.fs.cwd().openDir(user_program_path, .{});
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        const name = entry.name;
+        const file = "zig";
+        const paths = [_][]const u8{ user_program_path, name };
+        const full_path = try std.fs.path.join(b.allocator, &paths);
+        if (entry.kind == .file) {
+            if (name.len < file.len or !std.mem.eql(u8, name[name.len - file.len ..], file)) continue;
+
+            const parts = [_][]const u8{ "_", name[0 .. name.len - file.len - 1] };
+
+            const prog_name = try std.mem.concat(b.allocator, u8, &parts);
+            const prog = b.addExecutable(.{
+                .name = prog_name,
+                .root_source_file = b.path(full_path),
+                .optimize = .Debug,
+                .target = target,
+                .code_model = .medium,
+            });
+
+            prog.setLinkerScript(b.path("user/user.ld"));
+            prog.link_z_max_page_size = 4096;
+            b.getInstallStep().dependOn(&b.addInstallArtifact(prog, .{
+                .dest_dir = .{
+                    .override = .{
+                        .custom = "../user/bin",
+                    },
+                },
+            }).step);
+        }
+    }
 }
