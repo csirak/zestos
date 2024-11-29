@@ -107,6 +107,7 @@ pub fn release(buffer: *Buffer) void {
     buffer.sleeplock.release();
 
     cache_lock.acquire();
+    defer cache_lock.release();
     buffer.reference_count -= 1;
 
     if (buffer.reference_count == 0) {
@@ -119,19 +120,18 @@ pub fn release(buffer: *Buffer) void {
         head.next.prev = buffer;
         head.next = buffer;
     }
-    cache_lock.release();
 }
 
 pub fn addRef(buffer: *Buffer) void {
     cache_lock.acquire();
+    defer cache_lock.release();
     buffer.reference_count += 1;
-    cache_lock.release();
 }
 
 pub fn removeRef(buffer: *Buffer) void {
     cache_lock.acquire();
+    defer cache_lock.release();
     buffer.reference_count -= 1;
-    cache_lock.release();
 }
 
 pub fn allocDiskBlock(device: u16) u16 {

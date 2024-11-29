@@ -1,5 +1,5 @@
 const std = @import("std");
-const fs = @import("kernel/fs/makeFs.zig");
+const fs = @import("kernel/fs/init.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{

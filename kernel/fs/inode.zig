@@ -70,11 +70,11 @@ pub fn mapBlock(self: *Self, addr_index: u16) u32 {
         lib.kpanic("out of indirect address space");
     }
 
-    if (self.disk_inode.direct[fs.DIRECT_ADDRESS_SIZE] == 0) {
-        self.disk_inode.direct[fs.DIRECT_ADDRESS_SIZE] = BufferCache.allocDiskBlock(self.device);
+    if (self.disk_inode.addr_block == 0) {
+        self.disk_inode.addr_block = BufferCache.allocDiskBlock(self.device);
     }
 
-    const indirect_addr_block_num = self.disk_inode.direct[fs.DIRECT_ADDRESS_SIZE];
+    const indirect_addr_block_num = self.disk_inode.addr_block;
     const indirect_addr_block_buffer = BufferCache.read(self.device, @intCast(indirect_addr_block_num));
     defer BufferCache.release(indirect_addr_block_buffer);
     const indireact_addrs: *fs.IndirectAddressBlock = @ptrCast(@alignCast(&indirect_addr_block_buffer.data));
@@ -125,7 +125,7 @@ pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, com
     return bytes_read;
 }
 
-pub fn writeTo(self: *Self, src: u64, offset: u32, size: u64, comptime user_space: bool) !u64 {
+pub fn writeToAddress(self: *Self, src: u64, offset: u32, size: u64, comptime user_space: bool) !u64 {
     if (self.disk_inode.size < offset or (offset + size) < offset) {
         return error.OutOfBounds;
     }
@@ -170,8 +170,8 @@ pub fn truncate(self: *Self) void {
         }
     }
 
-    if (self.disk_inode.direct[fs.DIRECT_ADDRESS_SIZE] != 0) {
-        const indirect_address_block_num: u16 = @intCast(self.disk_inode.direct[fs.DIRECT_ADDRESS_SIZE]);
+    if (self.disk_inode.addr_block != 0) {
+        const indirect_address_block_num: u16 = @intCast(self.disk_inode.addr_block);
         const indirect_buffer = BufferCache.read(self.device, indirect_address_block_num);
         defer BufferCache.release(indirect_buffer);
         defer BufferCache.free(self.device, indirect_address_block_num);
@@ -182,7 +182,7 @@ pub fn truncate(self: *Self) void {
                 BufferCache.free(self.device, @intCast(indirect_addresses[j]));
             }
         }
-        self.disk_inode.direct[fs.DIRECT_ADDRESS_SIZE] = 0;
+        self.disk_inode.addr_block = 0;
     }
 
     self.disk_inode.size = 0;

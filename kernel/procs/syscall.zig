@@ -202,20 +202,19 @@ fn execSys(proc: *Process) !i64 {
 }
 
 fn openSys(proc: *Process) !i64 {
+    const path_user_address = proc.trapframe.?.a0;
+    const mode = proc.trapframe.?.a1;
     const S = struct {
         var path_buff = [_]u8{0} ** fs.MAX_PATH;
     };
     Log.beginTx();
     defer Log.endTx();
 
-    const path_user_address = proc.trapframe.?.a0;
-
     proc.pagetable.copyStringFromUser(path_user_address, @ptrCast(&S.path_buff), fs.MAX_PATH) catch |e| {
         lib.printf("error: {}\n", .{e});
         lib.kpanic("Failed to copy path from user to kernel");
     };
 
-    const mode = proc.trapframe.?.a1;
     const inode = if (mode & File.O_CREATE != 0)
         try INodeTable.create(@ptrCast(&S.path_buff), fs.INODE_FILE, 0, 0)
     else inode: {
@@ -392,7 +391,7 @@ fn unlinkSys(proc: *Process) !i64 {
     }
 
     const empty_dirent = std.mem.zeroes(fs.DirEntry);
-    const write_bytes = try parent.writeTo(@intFromPtr(&empty_dirent), @intCast(offset), @sizeOf(fs.DirEntry), false);
+    const write_bytes = try parent.writeToAddress(@intFromPtr(&empty_dirent), @intCast(offset), @sizeOf(fs.DirEntry), false);
 
     if (write_bytes != @sizeOf(fs.DirEntry)) {
         return error.InvalidDirEntDelete;

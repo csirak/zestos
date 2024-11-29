@@ -94,7 +94,7 @@ pub fn write(self: *Self, buffer_ptr: u64, size: u64) !i64 {
                 Log.beginTx();
                 defer Log.endTx();
                 file.inode.lock();
-                const written = try file.inode.writeTo(buffer_ptr + bytes_written, file.offset, to_write, true);
+                const written = try file.inode.writeToAddress(buffer_ptr + bytes_written, file.offset, to_write, true);
                 if (written != to_write) {
                     return error.WriteError;
                 }

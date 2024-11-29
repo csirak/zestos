@@ -25,7 +25,11 @@ pub fn makeFs(log: bool) void {
     };
     defer disk.close();
 
-    writeZeros();
+    const zero = [_]u8{0} ** fs.BLOCK_SIZE;
+    var i: u64 = 0;
+    while (i < fs.TOTAL_BLOCKS) : (i += 1) {
+        writeBlock(i, zero);
+    }
 
     writeSuperBlock();
 
@@ -50,29 +54,19 @@ pub fn makeFs(log: bool) void {
     debugPrint("blocks used: {d}\n", .{free_block - fs.NUM_META_BLOCKS});
 }
 
-fn writeZeros() void {
-    const zero = [_]u8{0} ** fs.BLOCK_SIZE;
-    var i: u64 = 0;
-    while (i < fs.TOTAL_BLOCKS) : (i += 1) {
-        writeBlock(i, zero);
-    }
-}
-
 fn writeSuperBlock() void {
-    const extension_bytes_size = fs.BLOCK_SIZE - @sizeOf(fs.SuperBlock);
-    const extension_bytes = [_]u8{0} ** extension_bytes_size;
-    const super_block_bytes: [@sizeOf(fs.SuperBlock)]u8 = @bitCast(fs.SUPER_BLOCK);
+    const extension_bytes = [_]u8{0} ** (fs.BLOCK_SIZE - @sizeOf(fs.SuperBlock));
+    const super_block_bytes = std.mem.toBytes(fs.SUPER_BLOCK);
     writeBlock(fs.SUPER_BLOCK_NUM, super_block_bytes ++ extension_bytes);
 }
 
 fn diskINodeAlloc(typ: u16) u16 {
-    defer free_inode += 1;
-
     const inode = fs.DiskINode{
         .typ = typ,
     };
     writeINode(free_inode, inode);
 
+    defer free_inode += 1;
     return free_inode;
 }
 
@@ -81,12 +75,11 @@ fn writeINode(inum: u16, inode: fs.DiskINode) void {
     const block_num = fs.inodeBlockNum(inum);
     readBlock(block_num, &buffer);
 
-    const inode_bytes = std.mem.asBytes(&inode);
     const index = inum % fs.INODES_PER_BLOCK;
     const block_offset = index * @sizeOf(fs.DiskINode);
-    const indexed_buffer = buffer[block_offset..];
+    const buffer_inode: *fs.DiskINode = @alignCast(@ptrCast(buffer[block_offset..][0..@sizeOf(fs.DiskINode)]));
+    buffer_inode.* = inode;
 
-    @memcpy(indexed_buffer[0..@sizeOf(fs.DiskINode)], inode_bytes);
     writeBlock(block_num, buffer);
 }
 
@@ -97,8 +90,7 @@ fn readINode(inum: u16, inode: *fs.DiskINode) void {
 
     const index = inum % fs.INODES_PER_BLOCK;
     const block_offset = index * @sizeOf(fs.DiskINode);
-    const inode_bytes = buffer[block_offset..][0..@sizeOf(fs.DiskINode)];
-    const buffer_inode: *const fs.DiskINode = @alignCast(@ptrCast(inode_bytes));
+    const buffer_inode: *const fs.DiskINode = @alignCast(@ptrCast(buffer[block_offset..][0..@sizeOf(fs.DiskINode)]));
     inode.* = buffer_inode.*;
 }
 
@@ -106,6 +98,7 @@ fn iNodeAppend(inum: u16, bytes: []const u8, size: u64) void {
     var buffer: fs.Block = undefined;
     var inode: fs.DiskINode = undefined;
     readINode(inum, &inode);
+
     const start = inode.size;
     var file_offset = start;
     var bytes_left = size;
@@ -131,14 +124,14 @@ fn iNodeAppend(inum: u16, bytes: []const u8, size: u64) void {
                 break :num inode.direct[block_index];
             } else {
                 // get block within indirect range
-                if (inode.direct[fs.DIRECT_ADDRESS_SIZE] == 0) {
-                    inode.direct[fs.DIRECT_ADDRESS_SIZE] = free_block;
+                if (inode.addr_block == 0) {
+                    inode.addr_block = free_block;
                     free_block += 1;
                 }
                 // load indirect address only once into cache
 
                 if (!has_cache) {
-                    readBlock(inode.direct[fs.DIRECT_ADDRESS_SIZE], @ptrCast(@alignCast(&indirect_addrs_cache)));
+                    readBlock(inode.addr_block, @ptrCast(@alignCast(&indirect_addrs_cache)));
                     has_cache = true;
                 }
                 var indirect_addrs = indirect_addrs_cache;
@@ -147,7 +140,7 @@ fn iNodeAppend(inum: u16, bytes: []const u8, size: u64) void {
                 if (indirect_addrs[indirect_index] == 0) {
                     indirect_addrs[indirect_index] = free_block;
                     const indirect_addrs_casted: *[fs.BLOCK_SIZE]u8 = @ptrCast(@alignCast(&indirect_addrs));
-                    writeBlock(inode.direct[fs.DIRECT_ADDRESS_SIZE], indirect_addrs_casted.*);
+                    writeBlock(inode.addr_block, indirect_addrs_casted.*);
                     free_block += 1;
                 }
                 break :num indirect_addrs[indirect_index];

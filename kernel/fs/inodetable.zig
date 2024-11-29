@@ -270,7 +270,7 @@ pub fn dirLink(dir: *INode, name: *[fs.DIR_NAME_SIZE]u8, inum: u16) !void {
     }
     lib.strCopyNullTerm(&entry.name, name, fs.DIR_NAME_SIZE);
     entry.inum = inum;
-    _ = try dir.writeTo(
+    _ = try dir.writeToAddress(
         @intFromPtr(&entry),
         offset,
         @sizeOf(fs.DirEntry),

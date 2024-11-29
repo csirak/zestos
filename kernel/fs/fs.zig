@@ -7,11 +7,12 @@ const INode = @import("inode.zig");
 pub const DiskINode = extern struct {
     typ: u16,
     // debug by searching bin files
-    major: u16 = 0x6969,
+    major: u16 = 0,
     minor: u16 = 0,
     num_links: u16 = 1,
     size: u32 = 0,
-    direct: [DIRECT_ADDRESS_SIZE + 1]u32 = [_]u32{0} ** (DIRECT_ADDRESS_SIZE + 1),
+    direct: [DIRECT_ADDRESS_SIZE]u32 = [_]u32{0} ** (DIRECT_ADDRESS_SIZE),
+    addr_block: u32 = 0,
 };
 
 pub const DirEntry = extern struct {
@@ -97,15 +98,8 @@ pub inline fn dirEntry(inum: u16, name: []const u8) DirEntry {
         .name = [_]u8{0} ** DIR_NAME_SIZE,
     };
 
-    strCopy(dir.name[0..], name, DIR_NAME_SIZE);
+    lib.strCopy(dir.name[0..], name, DIR_NAME_SIZE);
     return dir;
-}
-
-fn strCopy(dst: []u8, src: []const u8, size: u64) void {
-    const len = @min(src.len, size);
-    for (0..len) |i| {
-        dst[i] = src[i];
-    }
 }
 
 pub fn init() void {
