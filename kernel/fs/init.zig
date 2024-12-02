@@ -35,11 +35,11 @@ pub fn makeFs(log: bool) void {
 
     const root_inum = diskINodeAlloc(fs.INODE_DIR);
 
-    const dot = fs.dirEntry(root_inum, ".");
-    const dotdot = fs.dirEntry(root_inum, "..");
+    const dot = fs.dirEntryBytes(root_inum, ".");
+    const dotdot = fs.dirEntryBytes(root_inum, "..");
 
-    iNodeAppend(root_inum, std.mem.asBytes(&dot), @sizeOf(fs.DirEntry));
-    iNodeAppend(root_inum, std.mem.asBytes(&dotdot), @sizeOf(fs.DirEntry));
+    iNodeAppend(root_inum, dot, @sizeOf(fs.DirEntry));
+    iNodeAppend(root_inum, dotdot, @sizeOf(fs.DirEntry));
 
     addUserPrograms("user/bin", std.heap.page_allocator) catch |err| {
         debug.panic("Failed to add user programs: {s}", .{@errorName(err)});
@@ -90,11 +90,11 @@ fn readINode(inum: u16, inode: *fs.DiskINode) void {
 
     const index = inum % fs.INODES_PER_BLOCK;
     const block_offset = index * @sizeOf(fs.DiskINode);
-    const buffer_inode: *const fs.DiskINode = @alignCast(@ptrCast(buffer[block_offset..][0..@sizeOf(fs.DiskINode)]));
+    const buffer_inode: *fs.DiskINode = @alignCast(@ptrCast(buffer[block_offset..][0..@sizeOf(fs.DiskINode)]));
     inode.* = buffer_inode.*;
 }
 
-fn iNodeAppend(inum: u16, bytes: []const u8, size: u64) void {
+fn iNodeAppend(inum: u16, bytes: []u8, size: u64) void {
     var buffer: fs.Block = undefined;
     var inode: fs.DiskINode = undefined;
     readINode(inum, &inode);
@@ -104,11 +104,11 @@ fn iNodeAppend(inum: u16, bytes: []const u8, size: u64) void {
     var bytes_left = size;
 
     var has_cache: bool = false;
-    var indirect_addrs_cache: [fs.INDIRECT_ADDRESS_SIZE]u32 = undefined;
+    var indirect_addrs_cache: fs.IndirectAddressBlock = undefined;
 
-    const blocks_to_write = @divFloor(inode.size + bytes.len, fs.BLOCK_SIZE);
+    const blocks_to_write = @divFloor(inode.size + size, fs.BLOCK_SIZE);
     if (blocks_to_write > fs.MAX_ADDRESS_SIZE) {
-        debug.panic("File offset out of bounds with size: {}", .{bytes.len});
+        debug.panic("File offset out of bounds with size: {} {} {}", .{ size, inode.size, blocks_to_write });
     }
 
     while (bytes_left > 0) {
@@ -197,14 +197,14 @@ fn bitMapAdd(blocks: u64) void {
 fn addUserProgram(path: []const u8, name: []const u8) void {
     debugPrint("adding user program {s}\n", .{name});
     const inode_num = diskINodeAlloc(fs.INODE_FILE);
-    const dir_entry = fs.dirEntry(inode_num, name);
-    iNodeAppend(fs.ROOT_INODE, std.mem.asBytes(&dir_entry), @sizeOf(fs.DirEntry));
+    const dir_entry = fs.dirEntryBytes(inode_num, name);
+    iNodeAppend(fs.ROOT_INODE, dir_entry, @sizeOf(fs.DirEntry));
 
     const program_file = std.fs.cwd().openFile(path, .{}) catch |err| {
         debug.panic("Failed to create disk: {s}", .{@errorName(err)});
     };
 
-    var buffer: [1024]u8 = undefined;
+    var buffer: fs.Block = undefined;
     const size = program_file.getEndPos() catch |err| {
         debug.panic("Failed to get program file size: {s}", .{@errorName(err)});
     };

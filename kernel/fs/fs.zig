@@ -1,12 +1,14 @@
-const Sleeplock = @import("../locks/sleeplock.zig");
-const BufferCache = @import("buffercache.zig");
-const lib = @import("../lib.zig");
+const std = @import("std");
 const Log = @import("log.zig");
 const INode = @import("inode.zig");
+const BufferCache = @import("buffercache.zig");
+
+const lib = @import("../lib.zig");
+
+const Sleeplock = @import("../locks/sleeplock.zig");
 
 pub const DiskINode = extern struct {
     typ: u16,
-    // debug by searching bin files
     major: u16 = 0,
     minor: u16 = 0,
     num_links: u16 = 1,
@@ -17,7 +19,7 @@ pub const DiskINode = extern struct {
 
 pub const DirEntry = extern struct {
     inum: u16,
-    name: [DIR_NAME_SIZE]u8,
+    name: [DIR_NAME_SIZE]u8 = [_]u8{0} ** DIR_NAME_SIZE,
 };
 
 pub const SuperBlock = extern struct {
@@ -31,8 +33,12 @@ pub const SuperBlock = extern struct {
     bmap_start: u32,
 };
 
-pub const IndirectAddressBlock = [INDIRECT_ADDRESS_SIZE]u32;
+pub const DIRECT_ADDRESS_SIZE = 12;
+pub const INDIRECT_ADDRESS_SIZE = @divExact(BLOCK_SIZE, @sizeOf(u32));
+pub const MAX_ADDRESS_SIZE = DIRECT_ADDRESS_SIZE + INDIRECT_ADDRESS_SIZE;
+
 pub const Block = [BLOCK_SIZE]u8;
+pub const IndirectAddressBlock = [INDIRECT_ADDRESS_SIZE]u32;
 
 pub const MAGIC = 0x10203040;
 pub const TOTAL_BLOCKS = 2000;
@@ -45,10 +51,6 @@ pub const MAX_BLOCKS_PER_OP = 10;
 pub const NUM_LOG_BLOCKS = 3 * MAX_BLOCKS_PER_OP;
 pub const BUFFER_CACHE_SIZE = 3 * MAX_BLOCKS_PER_OP;
 pub const MAX_PATH = 128;
-
-pub const DIRECT_ADDRESS_SIZE = 12;
-pub const INDIRECT_ADDRESS_SIZE = @divExact(BLOCK_SIZE, @sizeOf(u32));
-pub const MAX_ADDRESS_SIZE = DIRECT_ADDRESS_SIZE + INDIRECT_ADDRESS_SIZE;
 
 pub const SUPER_BLOCK_NUM = 1;
 pub const BOOT_AND_SUPER_BLOCK_OFFSET = 2;
@@ -71,7 +73,7 @@ pub const INODE_FILE = 2;
 pub const INODE_DEVICE = 3;
 pub const INODE_SYMLINK = 4;
 
-pub const SUPER_BLOCK: SuperBlock = .{
+pub const SUPER_BLOCK = SuperBlock{
     .magic = MAGIC,
     .size = TOTAL_BLOCKS,
     .num_blocks = NUM_DATA_BLOCKS,
@@ -92,14 +94,13 @@ pub inline fn bitMapBlockNum(block_num: u16) u16 {
     return @intCast((@divFloor(block_num, BITS_PER_BLOCK)) + SUPER_BLOCK.bmap_start);
 }
 
-pub inline fn dirEntry(inum: u16, name: []const u8) DirEntry {
+pub inline fn dirEntryBytes(inum: u16, name: []const u8) []u8 {
     var dir = DirEntry{
         .inum = inum,
-        .name = [_]u8{0} ** DIR_NAME_SIZE,
     };
 
     lib.strCopy(dir.name[0..], name, DIR_NAME_SIZE);
-    return dir;
+    return std.mem.bytesAsSlice(u8, std.mem.asBytes(&dir));
 }
 
 pub fn init() void {
