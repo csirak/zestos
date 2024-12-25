@@ -34,14 +34,17 @@ pub const SuperBlock = extern struct {
 };
 
 pub const DIRECT_ADDRESS_SIZE = 12;
-pub const INDIRECT_ADDRESS_SIZE = @divExact(BLOCK_SIZE, @sizeOf(u32));
-pub const MAX_ADDRESS_SIZE = DIRECT_ADDRESS_SIZE + INDIRECT_ADDRESS_SIZE;
+pub const INDIRECT_ADDRESS_SIZE = @divExact(BLOCK_SIZE, @sizeOf(u32)) - 1;
 
 pub const Block = [BLOCK_SIZE]u8;
-pub const IndirectAddressBlock = [INDIRECT_ADDRESS_SIZE]u32;
+
+pub const IndirectAddressBlock = extern struct {
+    addrs: [INDIRECT_ADDRESS_SIZE]u32 = [_]u32{0} ** INDIRECT_ADDRESS_SIZE,
+    next_block: u32 = 0,
+};
 
 pub const MAGIC = 0x10203040;
-pub const TOTAL_BLOCKS = 2000;
+pub const TOTAL_BLOCKS = 20000;
 pub const INODES_NUM = 200;
 pub const ROOT_INODE = 1;
 pub const BLOCK_SIZE = 1024;

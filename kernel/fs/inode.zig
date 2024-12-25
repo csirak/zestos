@@ -68,19 +68,34 @@ pub fn mapBlock(self: *Self, addr_index: u16) u32 {
         self.disk_inode.addr_block = BufferCache.allocDiskBlock(self.device);
     }
 
-    const indirect_addr_block_num = self.disk_inode.addr_block;
-    const indirect_addr_block_buffer = BufferCache.read(self.device, @intCast(indirect_addr_block_num));
-    defer BufferCache.release(indirect_addr_block_buffer);
-    const indireact_addrs: *fs.IndirectAddressBlock = @ptrCast(@alignCast(&indirect_addr_block_buffer.data));
+    var indirect_addr_block_buffer = BufferCache.read(self.device, @intCast(self.disk_inode.addr_block));
+    var cur_block = self.disk_inode.addr_block;
 
-    const indirect_addr = indireact_addrs[indirect_addr_index];
+    defer BufferCache.release(indirect_addr_block_buffer);
+    var indirect_block: *fs.IndirectAddressBlock = @ptrCast(@alignCast(&indirect_addr_block_buffer.data));
+
+    const direct_offset_index = addr_index - fs.DIRECT_ADDRESS_SIZE;
+    const indirect_depth = @divFloor(direct_offset_index, fs.INDIRECT_ADDRESS_SIZE);
+    const indirect_index = direct_offset_index % fs.INDIRECT_ADDRESS_SIZE;
+
+    for (0..indirect_depth) |_| {
+        if (indirect_block.next_block == 0) {
+            indirect_block.next_block = BufferCache.allocDiskBlock(self.device);
+            Log.write(indirect_addr_block_buffer);
+        }
+        cur_block = indirect_block.next_block;
+        BufferCache.release(indirect_addr_block_buffer);
+        indirect_addr_block_buffer = BufferCache.read(self.device, @intCast(indirect_block.next_block));
+        indirect_block = @ptrCast(@alignCast(&indirect_addr_block_buffer.data));
+    }
+
+    const indirect_addr = indirect_block.addrs[indirect_index];
     if (indirect_addr != 0) {
         return indirect_addr;
     }
 
     const new_indirect_addr = BufferCache.allocDiskBlock(self.device);
-    const indirect_addrs: *fs.IndirectAddressBlock = @ptrCast(@alignCast(&indirect_addr_block_buffer.data));
-    indirect_addrs[indirect_addr_index] = new_indirect_addr;
+    indirect_block.addrs[indirect_addr_index] = new_indirect_addr;
     Log.write(indirect_addr_block_buffer);
 
     return new_indirect_addr;
@@ -122,9 +137,6 @@ pub fn readToAddress(self: *Self, dest: u64, file_start: u64, req_size: u64, com
 pub fn writeToAddress(self: *Self, src: u64, offset: u32, size: u64, comptime user_space: bool) !u64 {
     if (self.disk_inode.size < offset or (offset + size) < offset) {
         return error.OutOfBounds;
-    }
-    if (size + offset > fs.MAX_ADDRESS_SIZE * fs.BLOCK_SIZE) {
-        return error.OutOfBoundsOverflow;
     }
 
     var bytes_written: u32 = 0;

@@ -94,6 +94,46 @@ fn readINode(inum: u16, inode: *fs.DiskINode) void {
     inode.* = buffer_inode.*;
 }
 
+fn initMapBlock(inode: *fs.DiskINode, block_index: u64) u32 {
+    if (block_index < fs.DIRECT_ADDRESS_SIZE) {
+        if (inode.direct[block_index] == 0) {
+            inode.direct[block_index] = free_block;
+            free_block += 1;
+        }
+        return inode.direct[block_index];
+    }
+    if (inode.addr_block == 0) {
+        inode.addr_block = free_block;
+        free_block += 1;
+    }
+    const direct_offset_index = block_index - fs.DIRECT_ADDRESS_SIZE;
+    const indirect_depth = @divFloor(direct_offset_index, fs.INDIRECT_ADDRESS_SIZE);
+    const indirect_index = direct_offset_index % fs.INDIRECT_ADDRESS_SIZE;
+
+    var indirect_block = fs.IndirectAddressBlock{};
+    var cur_block = inode.addr_block;
+    readBlock(cur_block, @ptrCast(@alignCast(&indirect_block)));
+
+    for (0..indirect_depth) |_| {
+        if (indirect_block.next_block == 0) {
+            indirect_block.next_block = free_block;
+            free_block += 1;
+            const indirect_addres_bytes = std.mem.toBytes(indirect_block);
+            writeBlock(cur_block, indirect_addres_bytes);
+        }
+        cur_block = indirect_block.next_block;
+        readBlock(cur_block, @ptrCast(@alignCast(&indirect_block)));
+    }
+
+    if (indirect_block.addrs[indirect_index] == 0) {
+        indirect_block.addrs[indirect_index] = free_block;
+        const indirect_addres_bytes = std.mem.toBytes(indirect_block);
+        writeBlock(cur_block, indirect_addres_bytes);
+        free_block += 1;
+    }
+    return indirect_block.addrs[indirect_index];
+}
+
 fn iNodeAppend(inum: u16, bytes: []u8, size: u64) void {
     var buffer: fs.Block = undefined;
     var inode: fs.DiskINode = undefined;
@@ -103,50 +143,10 @@ fn iNodeAppend(inum: u16, bytes: []u8, size: u64) void {
     var file_offset = start;
     var bytes_left = size;
 
-    var has_cache: bool = false;
-    var indirect_addrs_cache: fs.IndirectAddressBlock = undefined;
-
-    const blocks_to_write = @divFloor(inode.size + size, fs.BLOCK_SIZE);
-    if (blocks_to_write > fs.MAX_ADDRESS_SIZE) {
-        debug.panic("File offset out of bounds with size: {} {} {}", .{ size, inode.size, blocks_to_write });
-    }
-
     while (bytes_left > 0) {
         const block_index = @divFloor(file_offset, fs.BLOCK_SIZE);
 
-        const block_num = num: {
-            if (block_index < fs.DIRECT_ADDRESS_SIZE) {
-                // get block within direct range
-                if (inode.direct[block_index] == 0) {
-                    inode.direct[block_index] = free_block;
-                    free_block += 1;
-                }
-                break :num inode.direct[block_index];
-            } else {
-                // get block within indirect range
-                if (inode.addr_block == 0) {
-                    inode.addr_block = free_block;
-                    free_block += 1;
-                }
-                // load indirect address only once into cache
-
-                if (!has_cache) {
-                    readBlock(inode.addr_block, @ptrCast(@alignCast(&indirect_addrs_cache)));
-                    has_cache = true;
-                }
-                var indirect_addrs = indirect_addrs_cache;
-                // get block within indirect range
-                const indirect_index = block_index - fs.DIRECT_ADDRESS_SIZE;
-                if (indirect_addrs[indirect_index] == 0) {
-                    indirect_addrs[indirect_index] = free_block;
-                    const indirect_addrs_casted: *[fs.BLOCK_SIZE]u8 = @ptrCast(@alignCast(&indirect_addrs));
-                    writeBlock(inode.addr_block, indirect_addrs_casted.*);
-                    free_block += 1;
-                }
-                break :num indirect_addrs[indirect_index];
-            }
-        };
-
+        const block_num = initMapBlock(&inode, block_index);
         readBlock(block_num, &buffer);
 
         const file_bytes_left_in_block = fs.BLOCK_SIZE - (file_offset % fs.BLOCK_SIZE);
