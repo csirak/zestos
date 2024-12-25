@@ -4,7 +4,7 @@ pub const NCPU = 4;
 pub const MAX_PROCS = 64;
 pub const PGSIZE = 4096; // bytes per page
 
-pub const KSTACK_SIZE = 2 * PGSIZE;
+pub const KSTACK_SIZE = 3 * PGSIZE;
 
 pub const UART0 = 0x10000000;
 pub const UART0_IRQ = 10;

@@ -85,11 +85,12 @@ fn mapKernelPages() !void {
     try pagetable.mapPages(riscv.TRAMPOLINE, trampoline_addr, riscv.PGSIZE, mem.PTE_R | mem.PTE_X);
 
     for (0..riscv.MAX_PROCS) |i| {
-        const page1 = try alloc();
-        const page2 = try alloc();
+        const size = @divExact(riscv.KSTACK_SIZE, riscv.PGSIZE);
         const virtual_address = riscv.KSTACK(i);
-        try pagetable.mapPages(virtual_address, @intFromPtr(page1), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
-        try pagetable.mapPages(virtual_address + riscv.PGSIZE, @intFromPtr(page2), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+        for (0..size) |j| {
+            const page = try alloc();
+            try pagetable.mapPages(virtual_address + j * riscv.PGSIZE, @intFromPtr(page), riscv.PGSIZE, mem.PTE_R | mem.PTE_W);
+        }
     }
 }
 
