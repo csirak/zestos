@@ -16,6 +16,8 @@ const Virtio = @import("fs/virtio.zig");
 const Console = @import("io/console.zig");
 const UART = @import("io/uart.zig");
 
+const Introspect = @import("tools/introspect/main.zig");
+
 const Interrupt = enum { Timer, Software, External, Syscall, Breakpoint, Unknown };
 
 var first_ret = true;
@@ -52,14 +54,12 @@ pub fn userTrap() void {
             riscv.intr_on();
             Syscalls.doSyscall();
         },
-
         .Timer => {
             proc.yield();
         },
-
         .External => {},
-
         else => {
+            Introspect.init() catch |e| Console.printf("Introspection error: {}\n", .{e});
             proc.setKilled();
             @panic("Unknown interrupt");
         },
@@ -170,7 +170,6 @@ fn getSupervisorInterrupt(cause: u64) Interrupt {
             return .External;
         },
         else => {
-            Console.printf("unknown fault: {}\n", .{flag});
             return .Unknown;
         },
     }

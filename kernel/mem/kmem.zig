@@ -17,7 +17,7 @@ extern fn trampoline() void;
 
 var lock: Spinlock = undefined;
 var freed: ?*AddressNode = undefined;
-var pagetable: PageTable = undefined;
+pub var pagetable: PageTable = undefined;
 
 pub fn init() void {
     const kernel_end_addr = @intFromPtr(&end);
@@ -51,6 +51,16 @@ pub fn alloc() !*u64 {
     const page = try getFreePage();
     @memset(page, 5);
     return @alignCast(@ptrCast(page));
+}
+
+// Depends on pages being linearly allocated
+pub fn allocMult(num: usize) !*u64 {
+    if (num == 0) return error.ZeroPagesRequested;
+    const first = try alloc();
+    for (1..num) |_| {
+        _ = try alloc();
+    }
+    return @alignCast(@ptrCast(first));
 }
 
 pub fn allocZeroed() !*u64 {

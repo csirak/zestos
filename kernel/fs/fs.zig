@@ -76,6 +76,17 @@ pub const INODE_FILE = 2;
 pub const INODE_DEVICE = 3;
 pub const INODE_SYMLINK = 4;
 
+pub fn logTyp(typ: u16) []const u8 {
+    return switch (typ) {
+        INODE_FREE => "FREE",
+        INODE_DIR => "DIR",
+        INODE_FILE => "FILE",
+        INODE_DEVICE => "DEVICE",
+        INODE_SYMLINK => "SYMLINK",
+        else => "UNKNOWN",
+    };
+}
+
 pub const SUPER_BLOCK = SuperBlock{
     .magic = MAGIC,
     .size = TOTAL_BLOCKS,

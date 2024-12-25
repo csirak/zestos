@@ -2,37 +2,53 @@ const fs = @import("../fs/fs.zig");
 const lib = @import("../lib.zig");
 const Uart = @import("../io/uart.zig");
 
-pub fn bytesDump(bytes: *[]u8, row_width: comptime_int, total_bytes: comptime_int, address_offset: u64) void {
+pub fn bytesDump(bytes: [*]const u8, row_width: comptime_int, total_bytes: comptime_int, address_offset: u64) void {
     if (total_bytes % row_width != 0) {
         lib.kpanic("Row width is not a multiple of block size\n");
     }
-    logHeader(row_width);
+    const addr_width = @max(numHexDigits(address_offset), numHexDigits(address_offset + total_bytes));
+    // spacing
+    logHeader(addr_width + 3, row_width);
     const row_nums = @divExact(total_bytes, row_width);
     const row_aligned_block: *const [row_nums][row_width]u8 = @ptrCast(bytes);
     for (row_aligned_block, 0..) |row, i| {
-        lib.printf(" 0x{x}", .{address_offset + i * row_width});
+        const line = address_offset + i * row_width;
+        const digs = numHexDigits(line);
+        for (0..(addr_width - digs)) |_| {
+            space();
+        }
+
+        lib.printf(" 0x{x}", .{line});
+
         tab();
         Uart.putc('|');
 
-        for (row) |byte| {
-            lib.printByte((byte));
-            space();
+        for (row, 0..) |byte, c| {
+            lib.printByte(byte);
+            if (c < row.len - 1) {
+                space();
+            } else {
+                Uart.putc('|');
+            }
         }
         tab();
         Uart.putc('|');
 
-        for (row) |byte| {
+        for (row, 0..) |byte, c| {
             Uart.putc(filterChar(byte));
-            space();
-            space();
+            if (c < row.len - 1) {
+                tab();
+            } else {
+                space();
+                Uart.putc('|');
+            }
         }
         newline();
     }
     newline();
 }
 
-pub fn blockDump(block_num: u16, block: *fs.Block, row_width: comptime_int) void {
-    logBlockInfo(block_num);
+pub fn blockDump(block_num: u16, block: *const fs.Block, row_width: comptime_int) void {
     const block_large: u64 = @intCast(block_num);
     bytesDump(@alignCast(@ptrCast(block)), row_width, fs.BLOCK_SIZE, block_large * fs.BLOCK_SIZE);
 }
@@ -86,11 +102,18 @@ fn logBlockInfo(block_num: u16) void {
     newline();
 }
 
-fn logHeader(row_width: comptime_int) void {
-    const placeholder = "0x00000000";
+fn numHexDigits(n: u64) u8 {
+    if (n == 0) return 1;
+    var x = n;
+    var i: u8 = 0;
+    while (x > 0) : (i += 1) x >>= 4;
+    return i;
+}
+
+fn logHeader(addr_width: u8, row_width: comptime_int) void {
     newline();
 
-    for (placeholder) |_| {
+    for (0..addr_width) |_| {
         space();
     }
     tab();
