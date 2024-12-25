@@ -140,10 +140,13 @@ pub fn userAlloc(self: *Self, old_size: u64, new_size: u64, flags: u16) !u64 {
     return new_size;
 }
 
-pub fn revokeUserPage(self: *Self, virtual_address: u64) !void {
+pub fn enablePagePerm(self: *Self, virtual_address: u64, perm: u64) !void {
     const pte = try self.getPageTableEntry(virtual_address, false);
-    const mask = ~(@as(u64, mem.PTE_U));
-    pte.* &= mask;
+    pte.* &= perm;
+}
+pub fn revokePagePerm(self: *Self, virtual_address: u64, perm: u64) !void {
+    const pte = try self.getPageTableEntry(virtual_address, false);
+    pte.* &= ~perm;
 }
 
 pub fn userDeAlloc(self: *Self, old_size: u64, new_size: u64) !u64 {

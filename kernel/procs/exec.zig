@@ -74,7 +74,7 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     proc.mem_size = try pagetable.userAlloc(user_space_size, stack_top, mem.PTE_W);
 
     // add guard page before top
-    try pagetable.revokeUserPage(page_aligned_size);
+    try pagetable.revokePagePerm(page_aligned_size, @intCast(mem.PTE_W));
     const stack_base = stack_top - riscv.PGSIZE;
 
     var user_stack = [_]u64{0} ** Process.MAX_ARGS;

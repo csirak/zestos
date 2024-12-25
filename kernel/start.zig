@@ -1,8 +1,10 @@
-const main = @import("main.zig").main;
-const riscv = @import("riscv.zig");
-const lib = @import("lib.zig");
 const std = @import("std");
 const Process = @import("procs/proc.zig");
+
+const riscv = @import("riscv.zig");
+const lib = @import("lib.zig");
+
+const main = @import("main.zig").main;
 
 export var timer_scratch = [_]u64{0} ** (riscv.NCPU * 5);
 
@@ -33,7 +35,7 @@ extern fn timervec() void;
 
 inline fn timerInit() void {
     const tid = riscv.r_mhartid();
-    const clint_mtimecmp: *u64 = riscv.CLINT_MTIMECMP(tid);
+    const clint_mtimecmp = riscv.CLINT_MTIMECMP(tid);
     clint_mtimecmp.* = riscv.CLINT_MTIME.* + riscv.TIMER_INTERVAL;
 
     var timer_scratch_2d: *[riscv.NCPU][5]u64 = @ptrCast(&timer_scratch);

@@ -20,6 +20,7 @@ pub fn init() void {
     lock = Spinlock.init("inode table");
     for (&inodes, 0..) |*inode, i| {
         inode.sleeplock = Sleeplock.initId("inode", @intCast(i));
+        inode.reference_count = 0;
     }
 }
 

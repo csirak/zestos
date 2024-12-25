@@ -198,7 +198,7 @@ fn execSys(proc: *Process) !i64 {
         };
     }
 
-    return exec(@ptrCast(&S.path_buff), argv) catch -1;
+    return try exec(@ptrCast(&S.path_buff), argv);
 }
 
 fn openSys(proc: *Process) !i64 {

@@ -31,16 +31,10 @@ pub fn lock(self: *Self) void {
     }
 
     self.sleeplock.acquire();
-
     if (self.valid) {
         return;
     }
-
-    const buffer = BufferCache.read(self.device, fs.inodeBlockNum(self.inum));
-    defer BufferCache.release(buffer);
-
-    const inode_ptr: *[fs.INODES_PER_BLOCK]fs.DiskINode = @ptrCast(&buffer.data);
-    self.disk_inode = inode_ptr[self.inum % fs.INODES_PER_BLOCK];
+    self.disk_inode = BufferCache.loadInodeFromDisk(self.device, self.inum);
     self.valid = true;
 }
 

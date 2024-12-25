@@ -2,7 +2,6 @@ const fs = @import("fs.zig");
 const lib = @import("../lib.zig");
 
 const Buffer = @import("buffer.zig");
-const BufferCache = @import("buffercache.zig");
 const Virtio = @import("virtio.zig");
 const Log = @import("log.zig");
 const Spinlock = @import("../locks/spinlock.zig");
@@ -67,8 +66,8 @@ pub fn read(device: u16, block_num: u16) *Buffer {
 }
 
 pub fn free(device: u16, block_num: u16) void {
-    const bitmap_buffer = BufferCache.read(device, fs.bitMapBlockNum(block_num));
-    defer BufferCache.release(bitmap_buffer);
+    const bitmap_buffer = read(device, fs.bitMapBlockNum(block_num));
+    defer release(bitmap_buffer);
     const mask = @as(u8, 1) << @intCast(block_num % 8);
     const byte_ptr = &bitmap_buffer.data[@divFloor(block_num, 8)];
     if (byte_ptr.* & mask == 0) {
@@ -91,6 +90,13 @@ pub fn readFromCache(device: u16, block_num: u16) *Buffer {
         lib.kpanic("readFromCache: block not in cache");
     }
     return buffer;
+}
+
+pub fn loadInodeFromDisk(device: u16, inum: u16) fs.DiskINode {
+    const buffer = read(device, fs.inodeBlockNum(inum));
+    defer release(buffer);
+    const inode_ptr: *[fs.INODES_PER_BLOCK]fs.DiskINode = @ptrCast(&buffer.data);
+    return inode_ptr[inum % fs.INODES_PER_BLOCK];
 }
 
 pub fn write(buffer: *Buffer) void {
@@ -137,8 +143,8 @@ pub fn removeRef(buffer: *Buffer) void {
 pub fn allocDiskBlock(device: u16) u16 {
     var bitmap_block: u16 = 0;
     while (bitmap_block < fs.loaded_super_block.size) : (bitmap_block += fs.BITS_PER_BLOCK) {
-        const bitmap_buffer = BufferCache.read(device, fs.bitMapBlockNum(bitmap_block));
-        defer BufferCache.release(bitmap_buffer);
+        const bitmap_buffer = read(device, fs.bitMapBlockNum(bitmap_block));
+        defer release(bitmap_buffer);
         for (0..fs.BITS_PER_BLOCK) |bi| {
             const block_index: u16 = @intCast(bi);
             const block_num = bitmap_block + block_index;
