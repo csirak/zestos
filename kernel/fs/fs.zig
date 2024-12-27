@@ -44,7 +44,7 @@ pub const IndirectAddressBlock = extern struct {
 };
 
 pub const MAGIC = 0x10203040;
-pub const TOTAL_BLOCKS = 20000;
+pub const TOTAL_BLOCKS = 50000;
 pub const INODES_NUM = 200;
 pub const ROOT_INODE = 1;
 pub const BLOCK_SIZE = 1024;
