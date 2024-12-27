@@ -1,5 +1,10 @@
 const std = @import("std");
 
+const Source = @import("source.zig");
+const TrapContext = @import("trap.zig");
+
+const Menu = @import("menu.zig").Menu;
+
 const riscv = @import("../../riscv.zig");
 const lib = @import("../../lib.zig");
 const kmem = @import("../../mem/kmem.zig");
@@ -7,10 +12,10 @@ const mem = @import("../../mem/mem.zig");
 
 const Console = @import("../../io/console.zig");
 
-const ErrContext = @import("err.zig");
-const Menu = @import("menu.zig").Menu;
-
 const STACK_SIZE = 5;
+
+// too large for kstack
+var input_buf = [_]u8{0} ** riscv.PGSIZE;
 
 // goals: allow queries over the kernel data
 //    - process context
@@ -45,13 +50,12 @@ pub fn init() !void {
 
     lib.print("\n\nINSTROSPECTION MODE\n\n");
     while (true) {
-        const line = getLine();
-        if (std.mem.eql(u8, line, "q")) {
+        var line = getLine();
+        if (line.isNext("q")) {
             break;
         }
-        _ = Menu.parse(line, null);
+        _ = Menu.parse(&line, null);
     }
-    lib.print("\n\nEND INSTROSPECTION MODE\n\n");
 
     riscv.w_sp(frame.sp);
 
@@ -59,7 +63,7 @@ pub fn init() !void {
     kmem.freeRange(frame.new_sp, frame.new_sp + STACK_SIZE * riscv.PGSIZE);
 }
 
-fn getLine() []u8 {
+fn getLine() Source {
     var cur: u64 = 0;
     @memset(&input_buf, 0);
     lib.print("\n> ");
@@ -67,7 +71,7 @@ fn getLine() []u8 {
         const write_addr = @intFromPtr(&input_buf) + cur;
         _ = Console.read(false, write_addr, 1) catch |e| lib.printf("error: {}\n", .{e});
     }
-    return input_buf[0 .. cur - 1];
+    return Source.init(input_buf[0 .. cur - 1]);
 }
 
 fn validInput(buf: riscv.Page) bool {

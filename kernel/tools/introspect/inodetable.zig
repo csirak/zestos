@@ -1,7 +1,8 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 
 const Command = @import("command.zig");
-const utils = @import("utils.zig");
+const Source = @import("source.zig");
 
 const blockdump = @import("../blockdump.zig");
 
@@ -15,25 +16,26 @@ const menu_items = [_]Command{
         .type = .{ .parse = &list },
     },
     .{
-        .type = .{ .parse = &help },
-    },
-    .{
         .type = .{ .parse = &indirectList },
     },
 };
 
 const menu = Command{
     .type = .{ .children = menu_items[0..] },
+    .help =
+    \\Inode Table: 
+    \\l - list inodes
+    \\il - indirect block address list 
+    ,
 };
 
-pub fn parse(source: []u8, context: ?*anyopaque) ?Command {
-    const name = "it";
-    if (!utils.matchName(name, source)) return null;
-    return menu.parse(source[name.len..], context);
+pub fn parse(src: *Source, context: ?*anyopaque) ?Command {
+    src.matchIden("it") orelse return null;
+    return menu.parse(src, context);
 }
-pub fn list(source: []u8, _: ?*anyopaque) ?Command {
-    const name = "l";
-    if (!utils.matchName(name, source)) return null;
+
+pub fn list(src: *Source, _: ?*anyopaque) ?Command {
+    src.matchIden("l") orelse return null;
 
     utils.logln("Inum\tType\tReferences\tInode Block\tFirst Block\tAddress Block\tSize");
 
@@ -51,24 +53,12 @@ pub fn list(source: []u8, _: ?*anyopaque) ?Command {
     return Command.end;
 }
 
-pub fn help(source: []u8, _: ?*anyopaque) ?Command {
-    const name = "h";
-    if (!utils.matchName(name, source)) return null;
-    utils.logln("Inode Table: ");
-    utils.logln("l - list inodes");
-    return Command.end;
-}
+pub fn indirectList(src: *Source, _: ?*anyopaque) ?Command {
+    src.matchIden("il") orelse return null;
+    src.matchNum() orelse return null;
 
-pub fn indirectList(source: []u8, _: ?*anyopaque) ?Command {
-    const name = "il";
-    if (!utils.matchName(name, source)) return null;
+    const inum = src.getNum(u16).?;
 
-    const src = utils.cleanSource(source[name.len..]);
-    const len = utils.parseNum(src) orelse return null;
-    const inum = std.fmt.parseUnsigned(u16, src[0..len], 0) catch |e| {
-        utils.logf("Parse Error: {s} {}", .{ src, e });
-        return null;
-    };
     if (inum >= fs.NUM_INODES) return null;
 
     const inode = loadInodes()[inum];
