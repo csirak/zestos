@@ -1,5 +1,6 @@
 const std = @import("std");
 const Process = @import("procs/proc.zig");
+const Introspect = @import("tools/introspect/main.zig");
 
 const riscv = @import("riscv.zig");
 const lib = @import("lib.zig");
@@ -50,16 +51,9 @@ inline fn timerInit() void {
 
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     const ra = @returnAddress();
-    const proc = Process.current();
-    if (proc) |p| {
-        lib.printf("pid: {}\n", .{p.getPid()});
-        lib.printf("epc: {}\n", .{p.trapframe.?.epc});
-    }
-    lib.printf("stack: 0x{x}\n", .{riscv.r_sp()});
-    lib.printf("stval: 0x{x}\n", .{riscv.r_stval()});
-    lib.printf("sepc: 0x{x}\n", .{riscv.r_sepc()});
+    const fp = riscv.r_fp();
+    lib.printf("panic: {s}\n", .{msg});
     lib.printf("ra: 0x{x}\n", .{ra});
-    lib.printf("a0: 0x{x}\n", .{riscv.r_a0()});
-    lib.printf("cause: 0x{x}\n", .{riscv.r_scause()});
-    lib.kpanic(msg);
+    Introspect.init(ra, fp) catch |e| lib.printf("Introspection error: {}\n", .{e});
+    while (true) {}
 }
