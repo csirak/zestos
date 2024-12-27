@@ -18,7 +18,7 @@ pub const DiskINode = extern struct {
 };
 
 pub const DirEntry = extern struct {
-    inum: u16,
+    inum: u16 = 0,
     name: [DIR_NAME_SIZE]u8 = [_]u8{0} ** DIR_NAME_SIZE,
 };
 

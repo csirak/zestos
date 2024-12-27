@@ -168,6 +168,7 @@ pub fn writeToAddress(self: *Self, src: u64, offset: u32, size: u64, comptime us
     return bytes_written;
 }
 
+// TODO: SWITCH TO LL
 pub fn truncate(self: *Self) void {
     for (0..fs.DIRECT_ADDRESS_SIZE) |i| {
         if (self.disk_inode.direct[i] != 0) {

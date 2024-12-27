@@ -117,6 +117,7 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
         }
     }
 
+    @memset(proc.name[0..], 0);
     lib.strCopyNullTerm(&proc.name, path[last_back_slash..], Process.NAME_SIZE);
 
     var old_pagetable = proc.pagetable;

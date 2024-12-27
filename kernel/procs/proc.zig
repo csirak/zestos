@@ -127,6 +127,7 @@ open_files: [fs.MAX_OPEN_FILES]?*File,
 trapframe: ?*TrapFrame,
 call_context: SysCallContext,
 name: [NAME_SIZE]u8,
+
 pub fn init() void {
     proc_glob_lock = Spinlock.init("proc_glob_lock");
     pid_lock = Spinlock.init("pid_lock");
@@ -181,7 +182,7 @@ pub fn free(self: *Self) !void {
 
     self.mem_size = 0;
     self.pid = 0;
-    self.name[0] = 0;
+    @memset(self.name[0..], 0);
     self.killed = false;
     self.exit_status = 0;
     self.state = .Unused;

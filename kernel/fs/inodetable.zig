@@ -254,7 +254,7 @@ pub fn dirLink(dir: *INode, name: *[fs.DIR_NAME_SIZE]u8, inum: u16) !void {
         return;
     }
     var offset: u32 = 0;
-    var entry: fs.DirEntry = undefined;
+    var entry = fs.DirEntry{};
     while (offset < dir.disk_inode.size) : (offset += @sizeOf(fs.DirEntry)) {
         const read = try dir.readToAddress(
             @intFromPtr(&entry),
