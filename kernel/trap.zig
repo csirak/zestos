@@ -59,7 +59,7 @@ pub fn userTrap() void {
         },
         .External => {},
         else => {
-            Introspect.init() catch |e| Console.printf("Introspection error: {}\n", .{e});
+            Introspect.init(0, 0) catch |e| Console.printf("Introspection error: {}\n", .{e});
             proc.setKilled();
             @panic("Unknown interrupt");
         },

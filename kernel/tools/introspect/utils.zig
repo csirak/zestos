@@ -1,6 +1,8 @@
 const std = @import("std");
-const lib = @import("../../lib.zig");
+
 const fs = @import("../../fs/fs.zig");
+const lib = @import("../../lib.zig");
+
 const Buffer = @import("../../fs/buffer.zig");
 
 pub fn matchName(name: []const u8, source: []u8) bool {
@@ -66,4 +68,7 @@ pub fn logln(s: []const u8) void {
 
 pub fn logf(comptime s: []const u8, args: anytype) void {
     lib.printf(s, args);
+}
+pub fn logNullTerm(s: [*]const u8) void {
+    lib.printNullTerm(s);
 }

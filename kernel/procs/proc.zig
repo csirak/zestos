@@ -98,7 +98,7 @@ const init_code = [_]u8{
     0x00, 0x00, 0x00, 0x00,
 };
 
-var PROCS: [riscv.MAX_PROCS]Self = undefined;
+pub var PROCS: [riscv.MAX_PROCS]Self = undefined;
 
 var proc_glob_lock: Spinlock = undefined;
 var pid_lock: Spinlock = undefined;
@@ -121,6 +121,7 @@ parent: *Self,
 // private to proc lock not needed
 kstackPtr: u64,
 mem_size: u64,
+stack_top: u64,
 pagetable: PageTable,
 cwd: *INode,
 open_files: [fs.MAX_OPEN_FILES]?*File,

@@ -71,6 +71,7 @@ pub fn exec(path: [*:0]u8, argv: [Process.MAX_ARGS]?[*:0]u8) !i64 {
     // TODO: check page alignment
     const page_aligned_size = mem.pageAlignUp(user_space_size);
     const stack_top = page_aligned_size + 2 * riscv.PGSIZE;
+    proc.stack_top = stack_top;
     proc.mem_size = try pagetable.userAlloc(user_space_size, stack_top, mem.PTE_W);
 
     // add guard page before top

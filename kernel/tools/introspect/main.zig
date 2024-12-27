@@ -28,11 +28,7 @@ var input_buf = [_]u8{0} ** riscv.PGSIZE;
 //     - kernel memory
 //     - files
 //     - disk
-
-// too large for kstack
-var input_buf = [_]u8{0} ** riscv.PGSIZE;
-
-pub fn init() !void {
+pub fn init(ra: u64, fp: u64) !void {
     const frame = struct {
         var sp: u64 = undefined;
         var new_sp: u64 = undefined;
@@ -45,8 +41,7 @@ pub fn init() !void {
 
     riscv.w_sp(frame.new_sp + STACK_SIZE * riscv.PGSIZE);
 
-    const err_context = ErrContext.loadFromTrap();
-    _ = err_context;
+    TrapContext.load(ra, fp);
 
     lib.print("\n\nINSTROSPECTION MODE\n\n");
     while (true) {
