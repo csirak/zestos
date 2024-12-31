@@ -23,12 +23,62 @@ inline fn errorToNull(r: u64) ?u64 {
     return if (@as(i64, @intCast(r)) < 0) null else r;
 }
 inline fn syscall(comptime x: comptime_int) u64 {
+    var y: u64 = 0;
     asm volatile ("li a7, %[x]"
         :
         : [x] "i" (x),
     );
     asm volatile ("ecall");
+    asm ("mv %[y], a0"
+        : [y] "=r" (y),
+    );
+    return y;
+}
+
+inline fn syscall2(a0: u64, a1: u64, comptime x: comptime_int) u64 {
     var y: u64 = 0;
+
+    asm volatile ("mv a0, %[x]"
+        :
+        : [x] "r" (a0),
+    );
+    asm volatile ("mv a1, %[x]"
+        :
+        : [x] "r" (a1),
+    );
+
+    asm volatile ("li a7, %[x]"
+        :
+        : [x] "i" (x),
+    );
+    asm volatile ("ecall");
+    asm ("mv %[y], a0"
+        : [y] "=r" (y),
+    );
+    return y;
+}
+
+inline fn syscall3(a0: u64, a1: u64, a2: u64, comptime x: comptime_int) u64 {
+    var y: u64 = 0;
+
+    asm volatile ("mv a0, %[x]"
+        :
+        : [x] "r" (a0),
+    );
+    asm volatile ("mv a1, %[x]"
+        :
+        : [x] "r" (a1),
+    );
+    asm volatile ("mv a2, %[x]"
+        :
+        : [x] "r" (a2),
+    );
+
+    asm volatile ("li a7, %[x]"
+        :
+        : [x] "i" (x),
+    );
+    asm volatile ("ecall");
     asm ("mv %[y], a0"
         : [y] "=r" (y),
     );
@@ -46,13 +96,10 @@ pub fn wait() u64 {}
 pub fn pipe() u64 {}
 
 pub fn read(file_descriptor: u64, buffer: [*]u8, len: usize) ?u64 {
-    _ = file_descriptor;
-    _ = buffer;
-    _ = len;
-    return errorToNull(syscall(SYSCALL_READ));
+    return errorToNull(syscall3(file_descriptor, @intFromPtr(buffer), @intCast(len), SYSCALL_READ));
 }
 
-pub fn read_slice(file_descriptor: u64, buffer: []u8) ?u64 {
+pub inline fn read_slice(file_descriptor: u64, buffer: []u8) ?u64 {
     return read(file_descriptor, buffer.ptr, buffer.len);
 }
 
@@ -66,19 +113,14 @@ pub fn sleep() u64 {}
 pub fn uptime() u64 {}
 
 pub fn open(path: [*:0]const u8, flags: u64) ?u64 {
-    _ = path;
-    _ = flags;
-    return errorToNull(syscall(SYSCALL_OPEN));
+    return errorToNull(syscall2(@intFromPtr(path), flags, SYSCALL_OPEN));
 }
 
 pub fn write(file_descriptor: u64, buffer: [*]u8, len: usize) ?u64 {
-    _ = file_descriptor;
-    _ = buffer;
-    _ = len;
-    return errorToNull(syscall(SYSCALL_WRITE));
+    return errorToNull(syscall3(file_descriptor, @intFromPtr(buffer), @intCast(len), SYSCALL_WRITE));
 }
 
-pub fn write_slice(file_descriptor: u64, buffer: []u8) ?u64 {
+pub inline fn write_slice(file_descriptor: u64, buffer: []u8) ?u64 {
     return write(file_descriptor, buffer.ptr, buffer.len);
 }
 
