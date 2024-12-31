@@ -18,6 +18,7 @@ pub const SYSCALL_UNLINK = 18;
 pub const SYSCALL_LINK = 19;
 pub const SYSCALL_MKDIR = 20;
 pub const SYSCALL_CLOSE = 21;
+pub const SYSCALL_INTROSPECT = 69;
 
 inline fn errorToNull(r: u64) ?u64 {
     return if (@as(i64, @intCast(r)) < 0) null else r;
@@ -131,4 +132,8 @@ pub fn mkdir() u64 {}
 pub fn close(fd: u64) ?u64 {
     _ = fd;
     return errorToNull(syscall(SYSCALL_CLOSE));
+}
+
+pub fn introspect() void {
+    _ = syscall(SYSCALL_INTROSPECT);
 }

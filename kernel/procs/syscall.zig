@@ -1,22 +1,25 @@
 const std = @import("std");
 
-const fs = @import("../fs/fs.zig");
+const exec = @import("exec.zig").exec;
+
 const lib = @import("../lib.zig");
 const riscv = @import("../riscv.zig");
 
 const Process = @import("proc.zig");
+const Traps = @import("../trap.zig");
 const Timer = @import("../timer.zig");
 
 const KMem = @import("../mem/kmem.zig");
+
+const fs = @import("../fs/fs.zig");
 
 const File = @import("../fs/file.zig");
 const Pipe = @import("../fs/pipe.zig");
 const INodeTable = @import("../fs/inodetable.zig");
 const FileTable = @import("../fs/filetable.zig");
 const Log = @import("../fs/log.zig");
-const Traps = @import("../trap.zig");
 
-const exec = @import("exec.zig").exec;
+const Introspect = @import("../tools/introspect/main.zig");
 
 pub const SYSCALL_FORK = 1;
 pub const SYSCALL_EXIT = 2;
@@ -38,6 +41,7 @@ pub const SYSCALL_UNLINK = 18;
 pub const SYSCALL_LINK = 19;
 pub const SYSCALL_MKDIR = 20;
 pub const SYSCALL_CLOSE = 21;
+pub const SYSCALL_INTROSPECT = 69;
 
 pub fn doSyscall() void {
     const proc = Process.currentOrPanic();
@@ -109,6 +113,9 @@ pub fn doSyscall() void {
         },
         SYSCALL_CLOSE => {
             proc.trapframe.?.a0 = @bitCast(closeSys(proc));
+        },
+        SYSCALL_INTROSPECT => {
+            Introspect.init(0, 0) catch @panic("INTROSPECT FAILED");
         },
         else => {
             lib.printf("address: 0x{x}\nsyscall_num: {}\n", .{ proc.trapframe.?.epc, syscall_num });
