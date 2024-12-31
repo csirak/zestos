@@ -245,7 +245,7 @@ pub fn fork(self: *Self) !u64 {
     newProc.trapframe.?.* = self.trapframe.?.*;
     newProc.trapframe.?.a0 = 0;
 
-    for (0..fs.MAX_OPEN_FILES) |i| if (self.open_files[i]) |file| {
+    for (self.open_files, 0..) |f, i| if (f) |file| {
         newProc.open_files[i] = FileTable.duplicate(file);
     };
 

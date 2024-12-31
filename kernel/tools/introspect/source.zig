@@ -51,6 +51,7 @@ pub fn getNum(self: *Self, Size: type) ?Size {
     const src = self.src[self.pos..];
     const len = self.nextSpace();
 
+    defer self.pos += len;
     return std.fmt.parseUnsigned(Size, src[0..len], 0) catch |e| {
         utils.logf("Parse Error: {s} {}", .{ src, e });
         return null;

@@ -30,6 +30,9 @@ const main_menu = Command{
 
 const proc_menu_items = [_]Command{
     .{
+        .type = .{ .parse = &fileTable },
+    },
+    .{
         .type = .{ .parse = &stackTrace },
     },
     .{
@@ -69,13 +72,37 @@ pub fn getProc(src: *Source, _: ?*anyopaque) ?Command {
         if (TrapContext.cur.cur_proc) |p| pid = p.pid else return null;
     } else {
         src.matchNum() orelse return null;
-        utils.logln("REACHED");
         pid = src.getNum(u64).?;
     }
     var proc = Process.PROCS[pid];
     return proc_menu.parse(src, &proc);
 }
 
+pub fn fileTable(src: *Source, ctx: ?*anyopaque) ?Command {
+    src.matchIden("ft") orelse return null;
+    const proc: *Process = @alignCast(@ptrCast(ctx orelse return null));
+
+    utils.logln("File table:");
+
+    for (proc.open_files, 0..) |maybe_f, i| {
+        if (maybe_f) |f| switch (f.data) {
+            .inode_file => |file| {
+                utils.logf("{}\t{}\tinode \n", .{ i, file.inode.inum });
+            },
+            .device => |d| {
+                utils.logf("{}\t{}\tdevice\n", .{ i, d.inode.inum });
+            },
+            .pipe => {
+                utils.logf("{d}: pipe\n", .{i});
+            },
+            else => {
+                utils.logf("{d}: unknown\n", .{i});
+            },
+        };
+    }
+
+    return Command.end;
+}
 pub fn stackTrace(src: *Source, _: ?*anyopaque) ?Command {
     src.matchIden("st") orelse return null;
 
